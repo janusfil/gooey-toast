@@ -79,4 +79,4 @@ const save = async () => {
 
 ## Styling
 
-The package ships with `styles.css` and uses stable data attributes like `[data-sileo-toast]` for targeting. You can also pass class names through `options.styles` to style title, description, badge, and button per toast.
+The package ships with `styles.css` and uses stable data attributes like `[data-gooey-toast]` for targeting. You can also pass class names through `options.styles` to style title, description, badge, and button per toast.

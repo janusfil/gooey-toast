@@ -1,14 +1,13 @@
 export {
-	cozyToast,
 	configureToaster,
 	createToaster,
+	gooeyToast,
 	mountToaster,
-	sileo,
 	toast,
 	unmountToaster,
 } from "./toast";
 
-export { SILEO_POSITIONS, TOAST_POSITIONS } from "./types";
+export { TOAST_POSITIONS } from "./types";
 
 export type {
 	ToasterHandle,
@@ -22,10 +21,4 @@ export type {
 	ToastRenderable,
 	ToastState,
 	ToastStyles,
-	SileoButton,
-	SileoOptions,
-	SileoPosition,
-	SileoPromiseOptions,
-	SileoState,
-	SileoStyles,
 } from "./types";

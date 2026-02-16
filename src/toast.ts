@@ -295,7 +295,7 @@ class ToastView {
 
 		this.root = document.createElement("button");
 		this.root.type = "button";
-		this.root.setAttribute("data-sileo-toast", "");
+		this.root.setAttribute("data-gooey-toast", "");
 		this.root.dataset.ready = "false";
 		this.root.dataset.expanded = "false";
 		this.root.dataset.exiting = String(Boolean(item.exiting));
@@ -304,21 +304,21 @@ class ToastView {
 		this.root.dataset.edge = placement.expand;
 
 		this.canvasEl = document.createElement("div");
-		this.canvasEl.setAttribute("data-sileo-canvas", "");
+		this.canvasEl.setAttribute("data-gooey-canvas", "");
 
 		this.svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-		this.svgEl.setAttribute("data-sileo-svg", "");
+		this.svgEl.setAttribute("data-gooey-svg", "");
 		this.svgEl.setAttribute("width", String(WIDTH));
 		this.svgEl.setAttribute("height", String(HEIGHT));
 		this.svgEl.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`);
 
 		const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-		title.textContent = "Sileo Notification";
+		title.textContent = "Gooey Toast Notification";
 		this.svgEl.append(title);
 
 		const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
 		const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
-		const filterId = `sileo-gooey-${this.id}-${item.instanceId}`;
+		const filterId = `gooey-toast-${this.id}-${item.instanceId}`;
 		filter.setAttribute("id", filterId);
 		filter.setAttribute("x", "-20%");
 		filter.setAttribute("y", "-20%");
@@ -361,27 +361,27 @@ class ToastView {
 		group.setAttribute("filter", `url(#${filterId})`);
 
 		this.pillRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-		this.pillRect.setAttribute("data-sileo-pill", "");
+		this.pillRect.setAttribute("data-gooey-pill", "");
 
 		this.bodyRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-		this.bodyRect.setAttribute("data-sileo-body", "");
+		this.bodyRect.setAttribute("data-gooey-body", "");
 
 		group.append(this.pillRect, this.bodyRect);
 		this.svgEl.append(defs, group);
 		this.canvasEl.append(this.svgEl);
 
 		this.headerEl = document.createElement("div");
-		this.headerEl.setAttribute("data-sileo-header", "");
+		this.headerEl.setAttribute("data-gooey-header", "");
 
 		this.headerStackEl = document.createElement("div");
-		this.headerStackEl.setAttribute("data-sileo-header-stack", "");
+		this.headerStackEl.setAttribute("data-gooey-header-stack", "");
 		this.headerEl.append(this.headerStackEl);
 
 		this.contentEl = document.createElement("div");
-		this.contentEl.setAttribute("data-sileo-content", "");
+		this.contentEl.setAttribute("data-gooey-content", "");
 
 		this.descriptionEl = document.createElement("div");
-		this.descriptionEl.setAttribute("data-sileo-description", "");
+		this.descriptionEl.setAttribute("data-gooey-description", "");
 		this.contentEl.append(this.descriptionEl);
 
 		this.root.append(this.canvasEl, this.headerEl, this.contentEl);
@@ -524,17 +524,17 @@ class ToastView {
 		}
 
 		const next = document.createElement("div");
-		next.setAttribute("data-sileo-header-inner", "");
+		next.setAttribute("data-gooey-header-inner", "");
 		next.dataset.layer = "current";
 
 		const badge = document.createElement("div");
-		badge.setAttribute("data-sileo-badge", "");
+		badge.setAttribute("data-gooey-badge", "");
 		badge.dataset.state = view.state;
 		badge.className = view.styles?.badge ?? "";
 		badge.replaceChildren(renderIcon(view.icon, view.state));
 
 		const title = document.createElement("span");
-		title.setAttribute("data-sileo-title", "");
+		title.setAttribute("data-gooey-title", "");
 		title.dataset.state = view.state;
 		title.className = view.styles?.title ?? "";
 		title.textContent = view.title;
@@ -573,7 +573,7 @@ class ToastView {
 		if (view.button) {
 			const action = document.createElement("a");
 			action.href = "#";
-			action.setAttribute("data-sileo-button", "");
+			action.setAttribute("data-gooey-button", "");
 			action.dataset.state = view.state;
 			action.className = view.styles?.button ?? "";
 			action.textContent = view.button.title;
@@ -800,7 +800,7 @@ class ToastView {
 		if (this.currentItem.exiting) return;
 
 		const target = event.target as HTMLElement | null;
-		if (target?.closest("[data-sileo-button]")) return;
+		if (target?.closest("[data-gooey-button]")) return;
 
 		this.pointerStartY = event.clientY;
 		this.root.setPointerCapture(event.pointerId);
@@ -992,7 +992,7 @@ class ToasterManager {
 		if (existing) return existing;
 
 		const section = document.createElement("section");
-		section.setAttribute("data-sileo-viewport", "");
+		section.setAttribute("data-gooey-viewport", "");
 		section.dataset.position = pos;
 		section.setAttribute("aria-live", "polite");
 		this.target.append(section);
@@ -1237,5 +1237,4 @@ export const toast = {
 	},
 };
 
-export const cozyToast = toast;
-export const sileo = toast;
+export const gooeyToast = toast;

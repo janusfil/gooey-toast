@@ -77,7 +77,7 @@ const createLifeBuoy = () => {
 
 const createLoaderCircle = () => {
 	const svg = createIcon("Loader Circle");
-	svg.setAttribute("data-sileo-icon", "spin");
+	svg.setAttribute("data-gooey-icon", "spin");
 	svg.setAttribute("aria-hidden", "true");
 	appendPath(svg, "M21 12a9 9 0 1 1-6.219-8.56");
 	return svg;

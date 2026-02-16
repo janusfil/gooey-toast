@@ -84,12 +84,3 @@ export interface ToasterHandle {
 	update: (options: ToasterOptions) => void;
 	unmount: () => void;
 }
-
-export const SILEO_POSITIONS = TOAST_POSITIONS;
-
-export type SileoState = ToastState;
-export type SileoStyles = ToastStyles;
-export type SileoButton = ToastButton;
-export type SileoPosition = ToastPosition;
-export type SileoOptions = ToastOptions;
-export type SileoPromiseOptions<T = unknown> = ToastPromiseOptions<T>;
