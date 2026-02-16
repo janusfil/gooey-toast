@@ -1,0 +1,48 @@
+{
+	"name": "gooey-toast",
+	"version": "0.1.0",
+	"description": "A framework-agnostic, physics-inspired toast notification library.",
+	"license": "MIT",
+	"keywords": [
+		"toast",
+		"notification",
+		"vue",
+		"react",
+		"svelte",
+		"javascript",
+		"typescript"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/janusfil/gooey-toast.git"
+	},
+	"homepage": "https://github.com/janusfil/gooey-toast#readme",
+	"bugs": {
+		"url": "https://github.com/janusfil/gooey-toast/issues"
+	},
+	"sideEffects": [
+		"./dist/styles.css"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./styles.css": "./dist/styles.css"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+		"build:ts": "tsc",
+		"build:css": "node -e \"require('node:fs').copyFileSync('src/styles.css', 'dist/styles.css')\"",
+		"build": "npm run clean && npm run build:ts && npm run build:css",
+		"dev": "tsc --watch --preserveWatchOutput"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.2"
+	}
+}
