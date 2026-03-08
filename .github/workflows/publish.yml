@@ -41,14 +41,7 @@ jobs:
       - name: Preview npm package contents
         run: npm pack --dry-run
 
-      - name: Publish to npm (token)
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish to npm (trusted publishing)
-        if: ${{ secrets.NPM_TOKEN == '' }}
         run: npm publish --provenance --access public
 
       - name: Prepare scoped package for GitHub Packages
