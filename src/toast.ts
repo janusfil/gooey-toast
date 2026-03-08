@@ -8,7 +8,6 @@ import {
 	type ToastRenderable,
 	type ToastRenderableValue,
 	type ToastState,
-	type ToastStyles,
 	type ToasterHandle,
 	type ToasterOffsetConfig,
 	type ToasterOffsetValue,
@@ -16,20 +15,17 @@ import {
 } from "./types";
 
 const DEFAULT_DURATION = 6000;
-const EXIT_DURATION = DEFAULT_DURATION * 0.1;
-const AUTO_EXPAND_DELAY = DEFAULT_DURATION * 0.025;
-const AUTO_COLLAPSE_DELAY = DEFAULT_DURATION - 2000;
-
-const HEIGHT = 40;
-const WIDTH = 350;
+const EXIT_DURATION = 180;
+const AUTO_EXPAND_DELAY = 150;
+const AUTO_COLLAPSE_DELAY = 4000;
+const SWIPE_DISMISS_DISTANCE = 30;
+const SWIPE_MAX_TRANSLATE = 20;
+const HOVER_RESUME_DELAY = 50;
+const TOAST_FALLBACK_WIDTH = 350;
+const TOAST_HEIGHT = 44;
 const DEFAULT_ROUNDNESS = 18;
 const BLUR_RATIO = 0.5;
-const PILL_PADDING = 10;
-const MIN_EXPAND_RATIO = 2.25;
-const SWAP_COLLAPSE_MS = 200;
-const HEADER_EXIT_MS = 150;
-const SWIPE_DISMISS = 30;
-const SWIPE_MAX = 20;
+const GOOEY_JOIN = 10;
 
 interface InternalToastOptions extends ToastOptions {
 	state?: ToastState;
@@ -38,25 +34,14 @@ interface InternalToastOptions extends ToastOptions {
 interface ToastRecord extends InternalToastOptions {
 	id: string;
 	instanceId: string;
-	exiting?: boolean;
+	exiting: boolean;
 	autoExpandDelayMs?: number;
 	autoCollapseDelayMs?: number;
 }
 
-interface ToastVisual {
-	title: string;
-	description?: ToastRenderable;
-	state: ToastState;
-	icon?: ToastRenderable | null;
-	styles?: ToastStyles;
-	button?: ToastButton;
-	fill: string;
-	roundness?: number;
-}
-
 interface ToastPlacement {
 	align: "left" | "center" | "right";
-	expand: "top" | "bottom";
+	edge: "top" | "bottom";
 }
 
 interface ToastViewCallbacks {
@@ -74,13 +59,13 @@ const store = {
 	options: undefined as Partial<ToastOptions> | undefined,
 
 	emit() {
-		for (const fn of this.listeners) {
-			fn(this.toasts);
+		for (const listener of this.listeners) {
+			listener(this.toasts);
 		}
 	},
 
-	update(fn: (prev: ToastRecord[]) => ToastRecord[]) {
-		this.toasts = fn(this.toasts);
+	update(updater: (prev: ToastRecord[]) => ToastRecord[]) {
+		this.toasts = updater(this.toasts);
 		this.emit();
 	},
 };
@@ -89,35 +74,40 @@ const isBrowser = () =>
 	typeof window !== "undefined" && typeof document !== "undefined";
 
 let idCounter = 0;
+
 const generateId = () =>
 	`${++idCounter}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const timeoutKey = (t: ToastRecord) => `${t.id}:${t.instanceId}`;
+const normalizeDuration = (value: number | null | undefined) =>
+	value === undefined ? DEFAULT_DURATION : value;
 
-const pillAlign = (pos: ToastPosition): ToastPlacement["align"] => {
-	if (pos.includes("right")) return "right";
-	if (pos.includes("center")) return "center";
-	return "left";
-};
-
-const expandDir = (pos: ToastPosition): ToastPlacement["expand"] =>
-	pos.startsWith("top") ? "bottom" : "top";
+const timeoutKey = (item: ToastRecord) => `${item.id}:${item.instanceId}`;
 
 const clamp = (value: number, min: number, max: number) =>
 	Math.min(max, Math.max(min, value));
 
+const resolvePlacement = (position: ToastPosition): ToastPlacement => ({
+	align: position.endsWith("left")
+		? "left"
+		: position.endsWith("center")
+			? "center"
+			: "right",
+	edge: position.startsWith("top") ? "top" : "bottom",
+});
+
 const resolveAutopilot = (
-	opts: InternalToastOptions,
+	options: InternalToastOptions,
 	duration: number | null,
-): { expandDelayMs?: number; collapseDelayMs?: number } => {
-	if (opts.autopilot === false || duration == null || duration <= 0) {
+): Pick<ToastRecord, "autoExpandDelayMs" | "autoCollapseDelayMs"> => {
+	if (options.autopilot === false || duration == null || duration <= 0) {
 		return {};
 	}
 
-	const cfg = typeof opts.autopilot === "object" ? opts.autopilot : undefined;
+	const cfg = typeof options.autopilot === "object" ? options.autopilot : undefined;
+
 	return {
-		expandDelayMs: clamp(cfg?.expand ?? AUTO_EXPAND_DELAY, 0, duration),
-		collapseDelayMs: clamp(cfg?.collapse ?? AUTO_COLLAPSE_DELAY, 0, duration),
+		autoExpandDelayMs: clamp(cfg?.expand ?? AUTO_EXPAND_DELAY, 0, duration),
+		autoCollapseDelayMs: clamp(cfg?.collapse ?? AUTO_COLLAPSE_DELAY, 0, duration),
 	};
 };
 
@@ -135,54 +125,71 @@ const buildToastRecord = (
 	id: string,
 	fallbackPosition?: ToastPosition,
 ): ToastRecord => {
-	const duration = merged.duration ?? DEFAULT_DURATION;
-	const auto = resolveAutopilot(merged, duration);
+	const duration = normalizeDuration(merged.duration);
 
 	return {
 		...merged,
 		id,
 		instanceId: generateId(),
+		exiting: false,
+		duration,
 		position: merged.position ?? fallbackPosition ?? store.position,
-		autoExpandDelayMs: auto.expandDelayMs,
-		autoCollapseDelayMs: auto.collapseDelayMs,
+		...resolveAutopilot(merged, duration),
 	};
 };
 
 const createToast = (options: InternalToastOptions) => {
-	const live = store.toasts.filter((t) => !t.exiting);
 	const merged = mergeOptions(options);
-
 	const id = merged.id ?? generateId();
-	const prev = live.find((t) => t.id === id);
-	const item = buildToastRecord(merged, id, prev?.position);
+	const existing = store.toasts.find((item) => item.id === id && !item.exiting);
+	const next = buildToastRecord(merged, id, existing?.position);
 
-	if (prev) {
-		store.update((all) => all.map((t) => (t.id === id ? item : t)));
+	if (existing) {
+		store.update((all) => all.map((item) => (item.id === id ? next : item)));
 	} else {
-		store.update((all) => [...all.filter((t) => t.id !== id), item]);
+		store.update((all) => [...all.filter((item) => item.id !== id), next]);
 	}
 
-	return { id, duration: merged.duration ?? DEFAULT_DURATION };
+	return { id };
 };
 
 const updateToast = (id: string, options: InternalToastOptions) => {
-	const existing = store.toasts.find((t) => t.id === id);
+	const existing = store.toasts.find((item) => item.id === id);
 	if (!existing) return;
 
 	const merged = mergeOptions({ ...options, id });
-	const item = buildToastRecord(merged, id, existing.position);
-	store.update((all) => all.map((t) => (t.id === id ? item : t)));
+	const next = buildToastRecord(merged, id, existing.position);
+
+	store.update((all) => all.map((item) => (item.id === id ? next : item)));
 };
 
+const exitTimers = new Map<string, number>();
+
 const dismissToast = (id: string) => {
-	const item = store.toasts.find((t) => t.id === id);
-	if (!item || item.exiting) return;
+	const existing = store.toasts.find((item) => item.id === id);
+	if (!existing || existing.exiting) return;
 
-	store.update((all) => all.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+	const key = timeoutKey(existing);
 
-	setTimeout(() => {
-		store.update((all) => all.filter((t) => t.id !== id));
+	store.update((all) =>
+		all.map((item) => (item.id === id ? { ...item, exiting: true } : item)),
+	);
+
+	const prevTimer = exitTimers.get(key);
+	if (prevTimer != null) {
+		clearTimeout(prevTimer);
+	}
+
+	const timer = window.setTimeout(() => {
+		exitTimers.delete(key);
+		store.update((all) =>
+			all.filter(
+				(item) => !(item.id === existing.id && item.instanceId === existing.instanceId),
+			),
+		);
 	}, EXIT_DURATION);
+
+	exitTimers.set(key, timer);
 };
 
 const resolveRenderableValue = (
@@ -225,13 +232,19 @@ const renderIcon = (
 	state: ToastState,
 ): Node => {
 	const resolved = resolveRenderableValue(value);
-	if (resolved == null) return createStateIcon(state);
+
+	if (resolved == null) {
+		return createStateIcon(state);
+	}
+
 	if (typeof resolved === "string" || typeof resolved === "number") {
 		return document.createTextNode(String(resolved));
 	}
+
 	if (isNode(resolved)) {
 		return resolved.cloneNode(true);
 	}
+
 	return createStateIcon(state);
 };
 
@@ -240,9 +253,8 @@ class ToastView {
 	readonly root: HTMLButtonElement;
 
 	private readonly callbacks: ToastViewCallbacks;
-	private placement: ToastPlacement;
 	private currentItem: ToastRecord;
-	private view: ToastVisual;
+	private placement: ToastPlacement;
 
 	private readonly canvasEl: HTMLDivElement;
 	private readonly svgEl: SVGSVGElement;
@@ -251,47 +263,32 @@ class ToastView {
 	private readonly bodyRect: SVGRectElement;
 
 	private readonly headerEl: HTMLDivElement;
-	private readonly headerStackEl: HTMLDivElement;
-	private currentHeaderEl: HTMLDivElement | null = null;
-
+	private readonly badgeEl: HTMLDivElement;
+	private readonly titleEl: HTMLSpanElement;
 	private readonly contentEl: HTMLDivElement;
 	private readonly descriptionEl: HTMLDivElement;
+	private sizeObserver: ResizeObserver | null = null;
 
-	private headerObserver: ResizeObserver | null = null;
-	private contentObserver: ResizeObserver | null = null;
-
-	private headerExitTimer: number | null = null;
+	private readyRaf: number | null = null;
 	private autoExpandTimer: number | null = null;
 	private autoCollapseTimer: number | null = null;
-	private swapTimer: number | null = null;
-	private readyRaf: number | null = null;
 
-	private pendingView: { payload: ToastVisual } | null = null;
-	private lastRefreshKey: string;
-
-	private headerPaddingPx: number | null = null;
-	private pillWidth = HEIGHT;
-	private contentHeight = 0;
-	private frozenExpanded = HEIGHT * MIN_EXPAND_RATIO;
 	private pointerStartY: number | null = null;
-
-	private hasDescriptionContent = false;
-	private isExpanded = false;
-	private canExpand = true;
+	private hasContent = false;
+	private expanded = false;
+	private containerWidth = TOAST_FALLBACK_WIDTH;
+	private headerWidth = TOAST_HEIGHT;
+	private contentHeight = 0;
 
 	constructor(
 		item: ToastRecord,
 		placement: ToastPlacement,
-		canExpand: boolean,
 		callbacks: ToastViewCallbacks,
 	) {
 		this.id = item.id;
 		this.currentItem = item;
 		this.placement = placement;
 		this.callbacks = callbacks;
-		this.view = this.createVisual(item);
-		this.lastRefreshKey = item.instanceId;
-		this.canExpand = canExpand;
 
 		this.root = document.createElement("button");
 		this.root.type = "button";
@@ -299,26 +296,22 @@ class ToastView {
 		this.root.dataset.ready = "false";
 		this.root.dataset.expanded = "false";
 		this.root.dataset.exiting = String(Boolean(item.exiting));
-		this.root.dataset.state = this.view.state;
-		this.root.dataset.position = placement.align;
-		this.root.dataset.edge = placement.expand;
 
 		this.canvasEl = document.createElement("div");
 		this.canvasEl.setAttribute("data-gooey-canvas", "");
 
 		this.svgEl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 		this.svgEl.setAttribute("data-gooey-svg", "");
-		this.svgEl.setAttribute("width", String(WIDTH));
-		this.svgEl.setAttribute("height", String(HEIGHT));
-		this.svgEl.setAttribute("viewBox", `0 0 ${WIDTH} ${HEIGHT}`);
-
-		const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-		title.textContent = "Gooey Toast Notification";
-		this.svgEl.append(title);
+		this.svgEl.setAttribute("width", String(TOAST_FALLBACK_WIDTH));
+		this.svgEl.setAttribute("height", String(TOAST_HEIGHT));
+		this.svgEl.setAttribute(
+			"viewBox",
+			`0 0 ${TOAST_FALLBACK_WIDTH} ${TOAST_HEIGHT}`,
+		);
 
 		const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
 		const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
-		const filterId = `gooey-toast-${this.id}-${item.instanceId}`;
+		const filterId = `gooey-toast-${item.id}-${item.instanceId}`;
 		filter.setAttribute("id", filterId);
 		filter.setAttribute("x", "-20%");
 		filter.setAttribute("y", "-20%");
@@ -373,94 +366,65 @@ class ToastView {
 		this.headerEl = document.createElement("div");
 		this.headerEl.setAttribute("data-gooey-header", "");
 
-		this.headerStackEl = document.createElement("div");
-		this.headerStackEl.setAttribute("data-gooey-header-stack", "");
-		this.headerEl.append(this.headerStackEl);
+		this.badgeEl = document.createElement("div");
+		this.badgeEl.setAttribute("data-gooey-badge", "");
+
+		this.titleEl = document.createElement("span");
+		this.titleEl.setAttribute("data-gooey-title", "");
+
+		this.headerEl.append(this.badgeEl, this.titleEl);
 
 		this.contentEl = document.createElement("div");
 		this.contentEl.setAttribute("data-gooey-content", "");
+		this.contentEl.dataset.visible = "false";
 
 		this.descriptionEl = document.createElement("div");
 		this.descriptionEl.setAttribute("data-gooey-description", "");
-		this.contentEl.append(this.descriptionEl);
 
+		this.contentEl.append(this.descriptionEl);
 		this.root.append(this.canvasEl, this.headerEl, this.contentEl);
 
 		this.root.addEventListener("mouseenter", this.handleMouseEnter);
 		this.root.addEventListener("mouseleave", this.handleMouseLeave);
-		this.root.addEventListener("transitionend", this.handleTransitionEnd);
 		this.root.addEventListener("pointerdown", this.handlePointerDown);
 		this.root.addEventListener("pointermove", this.handlePointerMove, {
 			passive: true,
 		});
 		this.root.addEventListener("pointerup", this.handlePointerUp, { passive: true });
+		this.root.addEventListener("pointercancel", this.handlePointerCancel, {
+			passive: true,
+		});
 
 		if (typeof ResizeObserver !== "undefined") {
-			this.contentObserver = new ResizeObserver(() => {
-				this.measureContent();
+			this.sizeObserver = new ResizeObserver(() => {
+				this.syncMetrics();
 			});
-			this.contentObserver.observe(this.descriptionEl);
+			this.sizeObserver.observe(this.root);
+			this.sizeObserver.observe(this.headerEl);
+			this.sizeObserver.observe(this.descriptionEl);
 		}
 
-		this.applyPlacement(placement);
-		this.applyVisual(this.view, false);
-		this.root.dataset.exiting = String(Boolean(item.exiting));
-		if (item.exiting || !canExpand) {
-			this.setExpanded(false);
-		}
-		this.refreshAutoPilot();
+		this.update(item, placement);
 
 		this.readyRaf = requestAnimationFrame(() => {
 			this.root.dataset.ready = "true";
 			this.readyRaf = null;
+			this.syncMetrics();
 		});
 	}
 
-	update(item: ToastRecord, placement: ToastPlacement, canExpand: boolean) {
+	update(item: ToastRecord, placement: ToastPlacement) {
 		this.currentItem = item;
-		this.canExpand = canExpand;
 		this.applyPlacement(placement);
 		this.root.dataset.exiting = String(Boolean(item.exiting));
 
-		const nextVisual = this.createVisual(item);
-		const refreshKey = item.instanceId;
+		this.render(item);
 
-		if (refreshKey !== this.lastRefreshKey) {
-			this.lastRefreshKey = refreshKey;
-
-			if (this.swapTimer != null) {
-				clearTimeout(this.swapTimer);
-				this.swapTimer = null;
-			}
-
-			if (this.isOpen()) {
-				this.pendingView = { payload: nextVisual };
-				this.setExpanded(false);
-				this.swapTimer = window.setTimeout(() => {
-					this.swapTimer = null;
-					this.applyPendingView();
-				}, SWAP_COLLAPSE_MS);
-			} else {
-				this.pendingView = null;
-				this.applyVisual(nextVisual, true);
-			}
-		} else {
-			this.applyVisual(nextVisual, true);
-		}
-
-		if (item.exiting || !canExpand) {
+		if (item.exiting || !this.canExpand()) {
 			this.setExpanded(false);
 		}
 
-		this.refreshAutoPilot();
-	}
-
-	updateCanExpand(canExpand: boolean) {
-		this.canExpand = canExpand;
-		if (!canExpand) {
-			this.setExpanded(false);
-		}
-		this.refreshAutoPilot();
+		this.refreshAutopilot();
 	}
 
 	destroy() {
@@ -469,223 +433,219 @@ class ToastView {
 			this.readyRaf = null;
 		}
 
-		this.clearInternalTimers();
+		this.sizeObserver?.disconnect();
+		this.sizeObserver = null;
 
-		this.headerObserver?.disconnect();
-		this.headerObserver = null;
-		this.contentObserver?.disconnect();
-		this.contentObserver = null;
+		this.clearAutoPilotTimers();
+		this.pointerStartY = null;
+		this.root.style.removeProperty("--gooey-drag-y");
 
 		this.root.removeEventListener("mouseenter", this.handleMouseEnter);
 		this.root.removeEventListener("mouseleave", this.handleMouseLeave);
-		this.root.removeEventListener("transitionend", this.handleTransitionEnd);
 		this.root.removeEventListener("pointerdown", this.handlePointerDown);
 		this.root.removeEventListener("pointermove", this.handlePointerMove);
 		this.root.removeEventListener("pointerup", this.handlePointerUp);
+		this.root.removeEventListener("pointercancel", this.handlePointerCancel);
 
 		this.root.remove();
-	}
-
-	private createVisual(item: ToastRecord): ToastVisual {
-		const state = item.state ?? "success";
-		return {
-			title: item.title ?? state,
-			description: item.description,
-			state,
-			icon: item.icon,
-			styles: item.styles,
-			button: item.button,
-			fill: item.fill ?? "#FFFFFF",
-			roundness: item.roundness,
-		};
 	}
 
 	private applyPlacement(placement: ToastPlacement) {
 		this.placement = placement;
 		this.root.dataset.position = placement.align;
-		this.root.dataset.edge = placement.expand;
-		this.canvasEl.dataset.edge = placement.expand;
-		this.headerEl.dataset.edge = placement.expand;
-		this.contentEl.dataset.edge = placement.expand;
+		this.root.dataset.edge = placement.edge;
 		this.applyGeometry();
 	}
 
-	private applyVisual(view: ToastVisual, animateHeader: boolean) {
-		this.view = view;
-		this.root.dataset.state = view.state;
-		this.renderHeader(view, animateHeader);
-		this.renderContent(view);
-		this.applyGeometry();
-	}
+	private render(item: ToastRecord) {
+		const state = item.state ?? "success";
+		const title = item.title ?? state;
 
-	private renderHeader(view: ToastVisual, animateHeader: boolean) {
-		for (const prev of this.headerStackEl.querySelectorAll('[data-layer="prev"]')) {
-			prev.remove();
+		this.root.dataset.state = state;
+
+		if (item.fill) {
+			this.root.style.setProperty("--gooey-fill", item.fill);
+		} else {
+			this.root.style.removeProperty("--gooey-fill");
 		}
 
-		const next = document.createElement("div");
-		next.setAttribute("data-gooey-header-inner", "");
-		next.dataset.layer = "current";
-
-		const badge = document.createElement("div");
-		badge.setAttribute("data-gooey-badge", "");
-		badge.dataset.state = view.state;
-		badge.className = view.styles?.badge ?? "";
-		badge.replaceChildren(renderIcon(view.icon, view.state));
-
-		const title = document.createElement("span");
-		title.setAttribute("data-gooey-title", "");
-		title.dataset.state = view.state;
-		title.className = view.styles?.title ?? "";
-		title.textContent = view.title;
-
-		next.append(badge, title);
-
-		if (this.currentHeaderEl) {
-			const current = this.currentHeaderEl;
-			if (animateHeader) {
-				current.dataset.layer = "prev";
-				current.dataset.exiting = "true";
-				if (this.headerExitTimer != null) {
-					clearTimeout(this.headerExitTimer);
-				}
-				this.headerExitTimer = window.setTimeout(() => {
-					this.headerExitTimer = null;
-					current.remove();
-				}, HEADER_EXIT_MS);
-			} else {
-				current.remove();
-			}
+		if (item.roundness != null) {
+			this.root.style.setProperty(
+				"--gooey-radius",
+				`${Math.max(0, item.roundness)}px`,
+			);
+		} else {
+			this.root.style.removeProperty("--gooey-radius");
 		}
 
-		this.currentHeaderEl = next;
-		this.headerStackEl.append(next);
-		this.observeHeader();
-		this.measureHeader();
-	}
+		this.badgeEl.dataset.state = state;
+		this.badgeEl.className = item.styles?.badge ?? "";
+		this.badgeEl.replaceChildren(renderIcon(item.icon, state));
 
-	private renderContent(view: ToastVisual) {
-		this.descriptionEl.className = view.styles?.description ?? "";
+		this.titleEl.dataset.state = state;
+		this.titleEl.className = item.styles?.title ?? "";
+		this.titleEl.textContent = title;
+
+		this.descriptionEl.className = item.styles?.description ?? "";
 		this.descriptionEl.replaceChildren();
 
-		let hasContent = renderRenderable(this.descriptionEl, view.description);
+		let hasContent = renderRenderable(this.descriptionEl, item.description);
 
-		if (view.button) {
-			const action = document.createElement("a");
-			action.href = "#";
-			action.setAttribute("data-gooey-button", "");
-			action.dataset.state = view.state;
-			action.className = view.styles?.button ?? "";
-			action.textContent = view.button.title;
-			action.addEventListener("click", (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				view.button?.onClick();
-			});
-			this.descriptionEl.append(action);
+		if (item.button) {
+			this.descriptionEl.append(this.buildActionButton(item.button, state, item.styles?.button));
 			hasContent = true;
 		}
 
-		this.hasDescriptionContent = hasContent;
+		this.hasContent = hasContent;
 		this.contentEl.style.display = hasContent ? "" : "none";
+
 		if (!hasContent) {
-			this.contentHeight = 0;
+			this.expanded = false;
+			this.root.dataset.expanded = "false";
+			this.contentEl.dataset.visible = "false";
 		}
-		this.measureContent();
+
+		this.syncMetrics();
 	}
 
-	private observeHeader() {
-		if (!this.currentHeaderEl || typeof ResizeObserver === "undefined") return;
-
-		this.headerObserver?.disconnect();
-		this.headerObserver = new ResizeObserver(() => {
-			this.measureHeader();
+	private buildActionButton(
+		button: ToastButton,
+		state: ToastState,
+		className?: string,
+	) {
+		const action = document.createElement("button");
+		action.type = "button";
+		action.setAttribute("data-gooey-button", "");
+		action.dataset.state = state;
+		action.className = className ?? "";
+		action.textContent = button.title;
+		action.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			button.onClick();
 		});
-		this.headerObserver.observe(this.currentHeaderEl);
+		return action;
 	}
 
-	private measureHeader() {
-		if (!this.currentHeaderEl) return;
-
-		if (this.headerPaddingPx == null) {
-			const style = getComputedStyle(this.headerEl);
-			this.headerPaddingPx =
-				parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-		}
-
-		const width = this.currentHeaderEl.scrollWidth + this.headerPaddingPx + PILL_PADDING;
-		if (width > 0 && this.pillWidth !== width) {
-			this.pillWidth = width;
-			this.applyGeometry();
-		}
-	}
-
-	private measureContent() {
-		const nextHeight = this.hasDescriptionContent ? this.descriptionEl.scrollHeight : 0;
-		if (this.contentHeight !== nextHeight) {
-			this.contentHeight = nextHeight;
-			this.applyGeometry();
-		}
-	}
-
-	private isOpen() {
-		if (!this.hasDescriptionContent) return false;
-		if (this.view.state === "loading") return false;
-		return this.isExpanded;
+	private canExpand() {
+		if (!this.hasContent) return false;
+		if (this.currentItem.exiting) return false;
+		return (this.currentItem.state ?? "success") !== "loading";
 	}
 
 	private setExpanded(next: boolean) {
-		if (this.isExpanded === next) return;
-		this.isExpanded = next;
+		const resolved = next && this.hasContent;
+		if (this.expanded === resolved) return;
+
+		this.expanded = resolved;
+		this.root.dataset.expanded = String(resolved);
+		this.contentEl.dataset.visible = String(resolved);
 		this.applyGeometry();
 	}
 
-	private applyPendingView() {
-		if (!this.pendingView) return;
-		const pending = this.pendingView;
-		this.pendingView = null;
-		this.applyVisual(pending.payload, true);
+	private syncMetrics() {
+		const width = this.root.getBoundingClientRect().width;
+		if (width > 0) {
+			this.containerWidth = Math.max(1, Math.round(width));
+		}
+
+		const nextHeaderWidth = Math.ceil(this.headerEl.scrollWidth);
+		if (nextHeaderWidth > 0) {
+			this.headerWidth = clamp(nextHeaderWidth, TOAST_HEIGHT, this.containerWidth);
+		}
+
+		this.contentHeight = this.hasContent
+			? Math.max(0, Math.ceil(this.descriptionEl.scrollHeight))
+			: 0;
+
+		this.applyGeometry();
 	}
 
-	private refreshAutoPilot() {
-		if (this.autoExpandTimer != null) {
-			clearTimeout(this.autoExpandTimer);
-			this.autoExpandTimer = null;
+	private alignedX(width: number) {
+		if (this.placement.align === "right") {
+			return this.containerWidth - width;
 		}
 
-		if (this.autoCollapseTimer != null) {
-			clearTimeout(this.autoCollapseTimer);
-			this.autoCollapseTimer = null;
+		if (this.placement.align === "center") {
+			return (this.containerWidth - width) / 2;
 		}
 
-		if (!this.hasDescriptionContent) return;
+		return 0;
+	}
 
-		const allowExpand = this.view.state !== "loading" && this.canExpand;
-		if (this.currentItem.exiting || !allowExpand) {
-			this.setExpanded(false);
+	private applyGeometry() {
+		const canOpen = this.expanded && this.canExpand();
+		const visibleContentHeight = canOpen ? this.contentHeight : 0;
+		const totalHeight = TOAST_HEIGHT + visibleContentHeight;
+		const headerWidth = clamp(this.headerWidth, TOAST_HEIGHT, this.containerWidth);
+		const bodyWidth = this.hasContent ? this.containerWidth : headerWidth;
+
+		const headerX = this.alignedX(headerWidth);
+		const bodyX = this.alignedX(bodyWidth);
+
+		const isTopEdge = this.placement.edge === "top";
+		const bodyHeight = canOpen ? visibleContentHeight + GOOEY_JOIN : 0;
+		const pillY = isTopEdge ? 0 : totalHeight - TOAST_HEIGHT;
+		const bodyY = isTopEdge ? TOAST_HEIGHT - GOOEY_JOIN : 0;
+
+		const roundness = Math.max(0, this.currentItem.roundness ?? DEFAULT_ROUNDNESS);
+		const blur = roundness * BLUR_RATIO;
+		const fill = this.currentItem.fill ?? "#FFFFFF";
+
+		this.root.style.setProperty("--_h", `${totalHeight}px`);
+		this.root.style.setProperty("--_hx", `${headerX}px`);
+		this.root.style.setProperty("--_hw", `${headerWidth}px`);
+		this.root.style.setProperty("--_bx", `${bodyX}px`);
+		this.root.style.setProperty("--_bw", `${bodyWidth}px`);
+
+		this.contentEl.dataset.visible = String(canOpen);
+
+		this.svgEl.setAttribute("width", String(this.containerWidth));
+		this.svgEl.setAttribute("height", String(totalHeight));
+		this.svgEl.setAttribute("viewBox", `0 0 ${this.containerWidth} ${totalHeight}`);
+		this.blurNode.setAttribute("stdDeviation", String(blur));
+
+		this.pillRect.setAttribute("x", String(headerX));
+		this.pillRect.setAttribute("y", String(pillY));
+		this.pillRect.setAttribute("width", String(headerWidth));
+		this.pillRect.setAttribute("height", String(TOAST_HEIGHT));
+		this.pillRect.setAttribute("rx", String(roundness));
+		this.pillRect.setAttribute("ry", String(roundness));
+		this.pillRect.setAttribute("fill", fill);
+
+		this.bodyRect.setAttribute("x", String(bodyX));
+		this.bodyRect.setAttribute("y", String(bodyY));
+		this.bodyRect.setAttribute("width", String(bodyWidth));
+		this.bodyRect.setAttribute("height", String(bodyHeight));
+		this.bodyRect.setAttribute("rx", String(roundness));
+		this.bodyRect.setAttribute("ry", String(roundness));
+		this.bodyRect.setAttribute("fill", fill);
+	}
+
+	private refreshAutopilot() {
+		this.clearAutoPilotTimers();
+
+		if (!this.canExpand()) {
 			return;
 		}
 
-		if (
-			this.currentItem.autoExpandDelayMs == null &&
-			this.currentItem.autoCollapseDelayMs == null
-		) {
+		const expandDelay = this.currentItem.autoExpandDelayMs;
+		const collapseDelay = this.currentItem.autoCollapseDelayMs;
+
+		if (expandDelay == null && collapseDelay == null) {
 			return;
 		}
 
-		const expandDelay = this.currentItem.autoExpandDelayMs ?? 0;
-		const collapseDelay = this.currentItem.autoCollapseDelayMs ?? 0;
-
-		if (expandDelay > 0) {
+		if ((expandDelay ?? 0) <= 0) {
+			this.setExpanded(true);
+		} else {
 			this.autoExpandTimer = window.setTimeout(() => {
 				this.autoExpandTimer = null;
 				this.setExpanded(true);
 			}, expandDelay);
-		} else {
-			this.setExpanded(true);
 		}
 
-		if (collapseDelay > 0) {
+		if (collapseDelay != null) {
 			this.autoCollapseTimer = window.setTimeout(() => {
 				this.autoCollapseTimer = null;
 				this.setExpanded(false);
@@ -693,73 +653,7 @@ class ToastView {
 		}
 	}
 
-	private applyGeometry() {
-		const open = this.isOpen();
-		const roundness = Math.max(0, this.view.roundness ?? DEFAULT_ROUNDNESS);
-		const blur = roundness * BLUR_RATIO;
-
-		const minExpanded = HEIGHT * MIN_EXPAND_RATIO;
-		const rawExpanded = this.hasDescriptionContent
-			? Math.max(minExpanded, HEIGHT + this.contentHeight)
-			: minExpanded;
-
-		if (open) {
-			this.frozenExpanded = rawExpanded;
-		}
-
-		const expanded = open ? rawExpanded : this.frozenExpanded;
-		const svgHeight = this.hasDescriptionContent ? Math.max(expanded, minExpanded) : HEIGHT;
-		const expandedContent = Math.max(0, expanded - HEIGHT);
-		const resolvedPillWidth = Math.max(this.pillWidth || HEIGHT, HEIGHT);
-		const pillHeight = HEIGHT + blur * 3;
-		const pillX =
-			this.placement.align === "right"
-				? WIDTH - resolvedPillWidth
-				: this.placement.align === "center"
-					? (WIDTH - resolvedPillWidth) / 2
-					: 0;
-
-		this.root.style.setProperty("--_h", `${open ? expanded : HEIGHT}px`);
-		this.root.style.setProperty("--_pw", `${resolvedPillWidth}px`);
-		this.root.style.setProperty("--_px", `${pillX}px`);
-		this.root.style.setProperty("--_sy", `${open ? 1 : HEIGHT / pillHeight}`);
-		this.root.style.setProperty("--_ph", `${pillHeight}px`);
-		this.root.style.setProperty("--_by", `${open ? 1 : 0}`);
-		this.root.style.setProperty(
-			"--_ht",
-			`translateY(${open ? (this.placement.expand === "bottom" ? 3 : -3) : 0}px) scale(${open ? 0.9 : 1})`,
-		);
-		this.root.style.setProperty("--_co", `${open ? 1 : 0}`);
-
-		this.root.dataset.expanded = String(open);
-		this.contentEl.dataset.visible = String(open);
-
-		this.svgEl.setAttribute("height", String(svgHeight));
-		this.svgEl.setAttribute("viewBox", `0 0 ${WIDTH} ${svgHeight}`);
-
-		this.blurNode.setAttribute("stdDeviation", String(blur));
-
-		this.pillRect.setAttribute("x", String(pillX));
-		this.pillRect.setAttribute("rx", String(roundness));
-		this.pillRect.setAttribute("ry", String(roundness));
-		this.pillRect.setAttribute("width", String(resolvedPillWidth));
-		this.pillRect.setAttribute("height", String(pillHeight));
-		this.pillRect.setAttribute("fill", this.view.fill);
-
-		this.bodyRect.setAttribute("y", String(HEIGHT));
-		this.bodyRect.setAttribute("width", String(WIDTH));
-		this.bodyRect.setAttribute("height", String(expandedContent));
-		this.bodyRect.setAttribute("rx", String(roundness));
-		this.bodyRect.setAttribute("ry", String(roundness));
-		this.bodyRect.setAttribute("fill", this.view.fill);
-	}
-
-	private clearInternalTimers() {
-		if (this.headerExitTimer != null) {
-			clearTimeout(this.headerExitTimer);
-			this.headerExitTimer = null;
-		}
-
+	private clearAutoPilotTimers() {
 		if (this.autoExpandTimer != null) {
 			clearTimeout(this.autoExpandTimer);
 			this.autoExpandTimer = null;
@@ -769,16 +663,13 @@ class ToastView {
 			clearTimeout(this.autoCollapseTimer);
 			this.autoCollapseTimer = null;
 		}
-
-		if (this.swapTimer != null) {
-			clearTimeout(this.swapTimer);
-			this.swapTimer = null;
-		}
 	}
 
 	private handleMouseEnter = () => {
 		this.callbacks.onEnter(this.id);
-		if (this.hasDescriptionContent) {
+		this.clearAutoPilotTimers();
+
+		if (this.canExpand()) {
 			this.setExpanded(true);
 		}
 	};
@@ -788,16 +679,9 @@ class ToastView {
 		this.setExpanded(false);
 	};
 
-	private handleTransitionEnd = (event: TransitionEvent) => {
-		if (event.propertyName !== "height" && event.propertyName !== "transform") {
-			return;
-		}
-		if (this.isOpen()) return;
-		this.applyPendingView();
-	};
-
 	private handlePointerDown = (event: PointerEvent) => {
 		if (this.currentItem.exiting) return;
+		if (event.pointerType === "mouse" && event.button !== 0) return;
 
 		const target = event.target as HTMLElement | null;
 		if (target?.closest("[data-gooey-button]")) return;
@@ -808,23 +692,37 @@ class ToastView {
 
 	private handlePointerMove = (event: PointerEvent) => {
 		if (this.pointerStartY == null) return;
-		const dy = event.clientY - this.pointerStartY;
-		const sign = dy > 0 ? 1 : -1;
-		const clamped = Math.min(Math.abs(dy), SWIPE_MAX) * sign;
-		this.root.style.transform = `translateY(${clamped}px)`;
+
+		const delta = event.clientY - this.pointerStartY;
+		const sign = delta < 0 ? -1 : 1;
+		const clamped = Math.min(Math.abs(delta), SWIPE_MAX_TRANSLATE) * sign;
+		this.root.style.setProperty("--gooey-drag-y", `${clamped}px`);
 	};
 
 	private handlePointerUp = (event: PointerEvent) => {
 		if (this.pointerStartY == null) return;
 
-		const dy = event.clientY - this.pointerStartY;
-		this.pointerStartY = null;
-		this.root.style.transform = "";
+		const delta = event.clientY - this.pointerStartY;
+		this.resetPointerState(event.pointerId);
 
-		if (Math.abs(dy) > SWIPE_DISMISS) {
+		if (Math.abs(delta) >= SWIPE_DISMISS_DISTANCE) {
 			this.callbacks.onDismiss(this.id);
 		}
 	};
+
+	private handlePointerCancel = (event: PointerEvent) => {
+		if (this.pointerStartY == null) return;
+		this.resetPointerState(event.pointerId);
+	};
+
+	private resetPointerState(pointerId: number) {
+		this.pointerStartY = null;
+		this.root.style.removeProperty("--gooey-drag-y");
+
+		if (this.root.hasPointerCapture(pointerId)) {
+			this.root.releasePointerCapture(pointerId);
+		}
+	}
 }
 
 class ToasterManager {
@@ -833,8 +731,8 @@ class ToasterManager {
 	private offset?: ToasterOffsetValue | ToasterOffsetConfig;
 	private defaultOptions?: Partial<ToastOptions>;
 
-	private activeId: string | undefined;
 	private hovering = false;
+	private hoverResumeTimer: number | null = null;
 
 	private readonly viewports = new Map<ToastPosition, HTMLElement>();
 	private readonly views = new Map<string, ToastView>();
@@ -891,7 +789,12 @@ class ToasterManager {
 		this.mounted = false;
 
 		store.listeners.delete(this.listener);
-		this.clearAllTimers();
+		this.clearDismissTimers();
+
+		if (this.hoverResumeTimer != null) {
+			clearTimeout(this.hoverResumeTimer);
+			this.hoverResumeTimer = null;
+		}
 
 		for (const view of this.views.values()) {
 			view.destroy();
@@ -907,12 +810,7 @@ class ToasterManager {
 	private render(toasts: ToastRecord[]) {
 		if (!this.mounted) return;
 
-		const latest = this.findLatest(toasts);
-		if (!this.hovering) {
-			this.activeId = latest;
-		}
-
-		const toastIds = new Set(toasts.map((toast) => toast.id));
+		const toastIds = new Set(toasts.map((item) => item.id));
 		for (const [id, view] of this.views) {
 			if (!toastIds.has(id)) {
 				view.destroy();
@@ -921,44 +819,41 @@ class ToasterManager {
 		}
 
 		const byPosition = new Map<ToastPosition, ToastRecord[]>();
+
 		for (const toast of toasts) {
-			const pos = toast.position ?? this.position;
-			const bucket = byPosition.get(pos);
+			const position = toast.position ?? this.position;
+			const bucket = byPosition.get(position);
 			if (bucket) {
 				bucket.push(toast);
 			} else {
-				byPosition.set(pos, [toast]);
+				byPosition.set(position, [toast]);
 			}
 		}
 
-		for (const pos of TOAST_POSITIONS) {
-			const items = byPosition.get(pos) ?? [];
+		for (const position of TOAST_POSITIONS) {
+			const items = byPosition.get(position) ?? [];
 			if (!items.length) {
-				this.removeViewport(pos);
+				this.removeViewport(position);
 				continue;
 			}
 
-			const viewport = this.ensureViewport(pos);
-			this.applyViewportOffset(viewport, pos);
+			const viewport = this.ensureViewport(position);
+			this.applyViewportOffset(viewport, position);
 
-			const placement: ToastPlacement = {
-				align: pillAlign(pos),
-				expand: expandDir(pos),
-			};
+			const placement = resolvePlacement(position);
 
 			for (const item of items) {
-				const canExpand = this.activeId == null || this.activeId === item.id;
 				const existing = this.views.get(item.id);
 
 				if (existing) {
-					existing.update(item, placement, canExpand);
+					existing.update(item, placement);
 					viewport.append(existing.root);
 					continue;
 				}
 
-				const view = new ToastView(item, placement, canExpand, {
-					onEnter: (id) => this.handleEnter(id),
-					onLeave: (id) => this.handleLeave(id),
+				const view = new ToastView(item, placement, {
+					onEnter: () => this.handleEnter(),
+					onLeave: () => this.handleLeave(),
 					onDismiss: (id) => dismissToast(id),
 				});
 
@@ -967,48 +862,50 @@ class ToasterManager {
 			}
 		}
 
-		const keys = new Set(toasts.map(timeoutKey));
+		const timerKeys = new Set(
+			toasts.filter((item) => !item.exiting).map((item) => timeoutKey(item)),
+		);
+
 		for (const [key, timer] of this.timers) {
-			if (!keys.has(key)) {
+			if (!timerKeys.has(key)) {
 				clearTimeout(timer);
 				this.timers.delete(key);
 			}
 		}
 
-		this.schedule(toasts);
-	}
-
-	private findLatest(toasts: ToastRecord[]) {
-		for (let i = toasts.length - 1; i >= 0; i -= 1) {
-			if (!toasts[i].exiting) {
-				return toasts[i].id;
-			}
+		if (this.hovering && !this.isAnyToastHovered()) {
+			this.hovering = false;
 		}
-		return undefined;
+
+		this.scheduleDismiss(toasts);
 	}
 
-	private ensureViewport(pos: ToastPosition) {
-		const existing = this.viewports.get(pos);
-		if (existing) return existing;
+	private ensureViewport(position: ToastPosition) {
+		const existing = this.viewports.get(position);
+		if (existing) {
+			existing.dataset.position = position;
+			return existing;
+		}
 
 		const section = document.createElement("section");
 		section.setAttribute("data-gooey-viewport", "");
-		section.dataset.position = pos;
+		section.dataset.position = position;
 		section.setAttribute("aria-live", "polite");
 		this.target.append(section);
 
-		this.viewports.set(pos, section);
+		this.viewports.set(position, section);
 		return section;
 	}
 
-	private removeViewport(pos: ToastPosition) {
-		const viewport = this.viewports.get(pos);
+	private removeViewport(position: ToastPosition) {
+		const viewport = this.viewports.get(position);
 		if (!viewport) return;
+
 		viewport.remove();
-		this.viewports.delete(pos);
+		this.viewports.delete(position);
 	}
 
-	private applyViewportOffset(viewport: HTMLElement, pos: ToastPosition) {
+	private applyViewportOffset(viewport: HTMLElement, position: ToastPosition) {
 		if (this.offset === undefined) {
 			viewport.style.top = "";
 			viewport.style.right = "";
@@ -1017,7 +914,7 @@ class ToasterManager {
 			return;
 		}
 
-		const offset =
+		const value =
 			typeof this.offset === "object"
 				? this.offset
 				: {
@@ -1027,41 +924,34 @@ class ToasterManager {
 					left: this.offset,
 				  };
 
-		const toPx = (value: ToasterOffsetValue) =>
-			typeof value === "number" ? `${value}px` : value;
+		const toCss = (entry: ToasterOffsetValue) =>
+			typeof entry === "number" ? `${entry}px` : entry;
 
 		viewport.style.top =
-			pos.startsWith("top") && offset.top !== undefined ? toPx(offset.top) : "";
+			position.startsWith("top") && value.top !== undefined ? toCss(value.top) : "";
 		viewport.style.bottom =
-			pos.startsWith("bottom") && offset.bottom !== undefined
-				? toPx(offset.bottom)
+			position.startsWith("bottom") && value.bottom !== undefined
+				? toCss(value.bottom)
 				: "";
 		viewport.style.left =
-			pos.endsWith("left") && offset.left !== undefined ? toPx(offset.left) : "";
+			position.endsWith("left") && value.left !== undefined ? toCss(value.left) : "";
 		viewport.style.right =
-			pos.endsWith("right") && offset.right !== undefined
-				? toPx(offset.right)
+			position.endsWith("right") && value.right !== undefined
+				? toCss(value.right)
 				: "";
 	}
 
-	private clearAllTimers() {
-		for (const timer of this.timers.values()) {
-			clearTimeout(timer);
-		}
-		this.timers.clear();
-	}
-
-	private schedule(toasts: ToastRecord[]) {
+	private scheduleDismiss(toasts: ToastRecord[]) {
 		if (this.hovering) return;
 
 		for (const toast of toasts) {
 			if (toast.exiting) continue;
 
+			const duration = normalizeDuration(toast.duration);
+			if (duration == null || duration <= 0) continue;
+
 			const key = timeoutKey(toast);
 			if (this.timers.has(key)) continue;
-
-			const duration = toast.duration ?? DEFAULT_DURATION;
-			if (duration == null || duration <= 0) continue;
 
 			const timer = window.setTimeout(() => {
 				this.timers.delete(key);
@@ -1072,27 +962,50 @@ class ToasterManager {
 		}
 	}
 
-	private handleEnter(id: string) {
-		this.activeId = id;
-		if (!this.hovering) {
-			this.hovering = true;
-			this.clearAllTimers();
+	private clearDismissTimers() {
+		for (const timer of this.timers.values()) {
+			clearTimeout(timer);
+		}
+		this.timers.clear();
+	}
+
+	private handleEnter() {
+		if (this.hoverResumeTimer != null) {
+			clearTimeout(this.hoverResumeTimer);
+			this.hoverResumeTimer = null;
 		}
 
-		for (const [toastId, view] of this.views) {
-			view.updateCanExpand(toastId === id);
+		if (!this.hovering) {
+			this.hovering = true;
+			this.clearDismissTimers();
 		}
 	}
 
-	private handleLeave(_: string) {
-		this.hovering = false;
-		this.activeId = this.findLatest(store.toasts);
-
-		for (const [toastId, view] of this.views) {
-			view.updateCanExpand(this.activeId == null || toastId === this.activeId);
+	private handleLeave() {
+		if (this.hoverResumeTimer != null) {
+			clearTimeout(this.hoverResumeTimer);
 		}
 
-		this.schedule(store.toasts);
+		this.hoverResumeTimer = window.setTimeout(() => {
+			this.hoverResumeTimer = null;
+
+			if (this.isAnyToastHovered()) {
+				return;
+			}
+
+			this.hovering = false;
+			this.scheduleDismiss(store.toasts);
+		}, HOVER_RESUME_DELAY);
+	}
+
+	private isAnyToastHovered() {
+		for (const view of this.views.values()) {
+			if (view.root.matches(":hover")) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
 
@@ -1100,9 +1013,11 @@ let singletonManager: ToasterManager | null = null;
 
 const ensureManager = () => {
 	if (!isBrowser()) return null;
+
 	if (!singletonManager) {
 		singletonManager = new ToasterManager();
 	}
+
 	return singletonManager;
 };
 
@@ -1113,7 +1028,9 @@ const noopHandle: ToasterHandle = {
 
 export const createToaster = (options: ToasterOptions = {}): ToasterHandle => {
 	const manager = ensureManager();
-	if (!manager) return noopHandle;
+	if (!manager) {
+		return noopHandle;
+	}
 
 	manager.configure(options);
 
@@ -1146,42 +1063,32 @@ const ensureToastTarget = () => {
 	ensureManager();
 };
 
+const showToast = (opts: ToastOptions, state?: ToastState) => {
+	if (!isBrowser()) {
+		return generateId();
+	}
+
+	ensureToastTarget();
+	return createToast(state ? { ...opts, state } : opts).id;
+};
+
+const resolvePromiseOptions = <T,>(
+	value: ToastOptions | ((payload: T) => ToastOptions),
+	payload: T,
+) => (typeof value === "function" ? value(payload) : value);
+
 export const toast = {
-	show: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast(opts).id;
-	},
+	show: (opts: ToastOptions) => showToast(opts),
 
-	success: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast({ ...opts, state: "success" }).id;
-	},
+	success: (opts: ToastOptions) => showToast(opts, "success"),
 
-	error: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast({ ...opts, state: "error" }).id;
-	},
+	error: (opts: ToastOptions) => showToast(opts, "error"),
 
-	warning: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast({ ...opts, state: "warning" }).id;
-	},
+	warning: (opts: ToastOptions) => showToast(opts, "warning"),
 
-	info: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast({ ...opts, state: "info" }).id;
-	},
+	info: (opts: ToastOptions) => showToast(opts, "info"),
 
-	action: (opts: ToastOptions) => {
-		if (!isBrowser()) return generateId();
-		ensureToastTarget();
-		return createToast({ ...opts, state: "action" }).id;
-	},
+	action: (opts: ToastOptions) => showToast(opts, "action"),
 
 	promise: <T,>(
 		promise: Promise<T> | (() => Promise<T>),
@@ -1193,35 +1100,44 @@ export const toast = {
 
 		ensureToastTarget();
 
-		const { id } = createToast({
+		const id = createToast({
 			...opts.loading,
 			state: "loading",
 			duration: null,
 			position: opts.position,
-		});
+		}).id;
 
-		const next = typeof promise === "function" ? promise() : promise;
+		const pending = typeof promise === "function" ? promise() : promise;
 
-		next
+		pending
 			.then((data) => {
 				if (opts.action) {
-					const actionOpts =
-						typeof opts.action === "function" ? opts.action(data) : opts.action;
-					updateToast(id, { ...actionOpts, state: "action", id });
+					const action = resolvePromiseOptions(opts.action, data);
+					updateToast(id, {
+						...action,
+						state: "action",
+						id,
+					});
 					return;
 				}
 
-				const successOpts =
-					typeof opts.success === "function" ? opts.success(data) : opts.success;
-				updateToast(id, { ...successOpts, state: "success", id });
+				const success = resolvePromiseOptions(opts.success, data);
+				updateToast(id, {
+					...success,
+					state: "success",
+					id,
+				});
 			})
 			.catch((error) => {
-				const errorOpts =
-					typeof opts.error === "function" ? opts.error(error) : opts.error;
-				updateToast(id, { ...errorOpts, state: "error", id });
+				const failure = resolvePromiseOptions(opts.error, error);
+				updateToast(id, {
+					...failure,
+					state: "error",
+					id,
+				});
 			});
 
-		return next;
+		return pending;
 	},
 
 	dismiss: (id: string) => {
@@ -1231,9 +1147,13 @@ export const toast = {
 
 	clear: (position?: ToastPosition) => {
 		if (!isBrowser()) return;
-		store.update((all) =>
-			position ? all.filter((toast) => toast.position !== position) : [],
-		);
+
+		if (position) {
+			store.update((all) => all.filter((item) => item.position !== position));
+			return;
+		}
+
+		store.update(() => []);
 	},
 };
 
