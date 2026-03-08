@@ -32,6 +32,13 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"engines": {
+		"node": ">=18"
+	},
 	"files": [
 		"dist"
 	],
@@ -40,6 +47,8 @@
 		"build:ts": "tsc",
 		"build:css": "node -e \"require('node:fs').copyFileSync('src/styles.css', 'dist/styles.css')\"",
 		"build": "npm run clean && npm run build:ts && npm run build:css",
+		"check:package": "npm pack --dry-run",
+		"prepublishOnly": "npm run build",
 		"dev": "tsc --watch --preserveWatchOutput",
 		"playground": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap --servedir=. --serve=8080 --watch",
 		"playground:build": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap"

@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "feat: "
+labels:
+  - feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What limitation are you hitting?
+      placeholder: It is hard to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you want.
+      placeholder: Add an option that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional alternatives or workarounds.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Use cases, mockups, or references.

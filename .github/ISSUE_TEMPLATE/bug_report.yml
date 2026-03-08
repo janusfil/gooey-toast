@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem in gooey-toast
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this.
+        Please include a minimal reproduction so we can fix it quickly.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: Toast expands and collapses unexpectedly on hover...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact steps.
+      placeholder: |
+        1. Mount toaster in top-right position
+        2. Show action toast with description
+        3. Hover and leave quickly
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: 0.1.1
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / runtime
+      placeholder: Chrome 123, Node 20
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, videos, or links to a repro repo.

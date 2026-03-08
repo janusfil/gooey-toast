@@ -3,21 +3,25 @@ name: Publish Package
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
+  contents: write
   id-token: write
-  contents: read
+  packages: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: npm
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
@@ -26,8 +30,85 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify build
-        run: ls -la dist/
+      - name: Verify tag version
+        run: |
+          PACKAGE_VERSION="v$(node -p 'require("./package.json").version')"
+          if [ "${GITHUB_REF_NAME}" != "${PACKAGE_VERSION}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${PACKAGE_VERSION}"
+            exit 1
+          fi
 
-      - name: Publish to npm
+      - name: Preview npm package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm (token)
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm (trusted publishing)
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        run: npm publish --provenance --access public
+
+      - name: Prepare scoped package for GitHub Packages
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const owner = (process.env.REPO_OWNER || "").toLowerCase();
+          if (!owner) {
+            throw new Error("Missing REPO_OWNER");
+          }
+
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const outDir = path.resolve(".release/github-package");
+
+          fs.rmSync(outDir, { recursive: true, force: true });
+          fs.mkdirSync(path.join(outDir, "dist"), { recursive: true });
+          fs.cpSync(path.resolve("dist"), path.join(outDir, "dist"), {
+            recursive: true,
+          });
+          fs.copyFileSync(path.resolve("README.md"), path.join(outDir, "README.md"));
+
+          if (fs.existsSync(path.resolve("LICENSE"))) {
+            fs.copyFileSync(path.resolve("LICENSE"), path.join(outDir, "LICENSE"));
+          }
+
+          const githubPkg = {
+            ...pkg,
+            name: `@${owner}/${pkg.name}`,
+            private: false,
+            publishConfig: {
+              registry: "https://npm.pkg.github.com",
+            },
+          };
+
+          delete githubPkg.scripts;
+          delete githubPkg.devDependencies;
+
+          fs.writeFileSync(
+            path.join(outDir, "package.json"),
+            JSON.stringify(githubPkg, null, 2) + "\n",
+          );
+          NODE
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://npm.pkg.github.com
+          scope: "@${{ github.repository_owner }}"
+
+      - name: Publish to GitHub Packages
         run: npm publish
+        working-directory: .release/github-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

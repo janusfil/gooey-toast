@@ -1,5 +1,12 @@
 # gooey-toast
 
+[![CI](https://img.shields.io/github/actions/workflow/status/janusfil/gooey-toast/ci.yml?branch=main&label=ci)](https://github.com/janusfil/gooey-toast/actions/workflows/ci.yml)
+[![Publish](https://img.shields.io/github/actions/workflow/status/janusfil/gooey-toast/publish.yml?label=publish)](https://github.com/janusfil/gooey-toast/actions/workflows/publish.yml)
+[![npm version](https://img.shields.io/npm/v/gooey-toast?logo=npm)](https://www.npmjs.com/package/gooey-toast)
+[![npm downloads](https://img.shields.io/npm/dm/gooey-toast?logo=npm)](https://www.npmjs.com/package/gooey-toast)
+[![GitHub release](https://img.shields.io/github/v/release/janusfil/gooey-toast?display_name=tag)](https://github.com/janusfil/gooey-toast/releases)
+[![License](https://img.shields.io/npm/l/gooey-toast)](./LICENSE)
+
 A framework-agnostic, physics-inspired toast notification package.
 
 - No React/Vue peer dependency
@@ -10,6 +17,12 @@ A framework-agnostic, physics-inspired toast notification package.
 
 ```bash
 npm i gooey-toast
+```
+
+GitHub Packages mirror (scoped package):
+
+```bash
+npm i @janusfil/gooey-toast --registry=https://npm.pkg.github.com
 ```
 
 ## Quick start (vanilla JS/TS)
@@ -101,3 +114,18 @@ The playground also exposes helper functions in the browser console via
 ## Styling
 
 The package ships with `styles.css` and uses stable data attributes like `[data-gooey-toast]` for targeting. You can also pass class names through `options.styles` to style title, description, badge, and button per toast.
+
+## Release and package automation
+
+- Push and PR runs are validated by CI (`.github/workflows/ci.yml`).
+- Tagging `vX.Y.Z` triggers publish flow (`.github/workflows/publish.yml`).
+- Publish flow validates tag/version, builds artifacts, publishes to npm, mirrors
+  the same version to GitHub Packages, and creates a GitHub Release with
+  generated notes.
+
+## Project hygiene
+
+- Contribution guide: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- Issue and PR templates are in `.github/`
