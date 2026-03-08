@@ -47,6 +47,9 @@
 	--gooey-state-warning: oklch(0.795 0.184 86.047);
 	--gooey-state-info: oklch(0.685 0.169 237.323);
 	--gooey-state-action: oklch(0.623 0.214 259.815);
+	--gooey-shadow:
+		drop-shadow(0 0 0.5px rgba(15, 23, 42, 0.24))
+		drop-shadow(0 0 16px rgba(15, 23, 42, 0.2));
 }
 
 /* ---------------------------------- Toast --------------------------------- */
@@ -56,8 +59,10 @@
 	cursor: pointer;
 	pointer-events: auto;
 	touch-action: none;
+	appearance: none;
 	border: 0;
 	background: transparent;
+	box-shadow: none;
 	padding: 0;
 	width: var(--gooey-width);
 	height: var(--_h, var(--gooey-height));
@@ -133,6 +138,7 @@
 
 [data-gooey-svg] {
 	overflow: visible;
+	filter: var(--gooey-shadow);
 }
 
 /* --------------------------------- Shapes --------------------------------- */

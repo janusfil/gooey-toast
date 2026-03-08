@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="cs">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>gooey-toast playground</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+			rel="stylesheet"
+		/>
+		<link rel="stylesheet" href="../src/styles.css" />
+		<link rel="stylesheet" href="./styles.css" />
+	</head>
+	<body>
+		<main class="shell">
+			<section class="card hero">
+				<p class="kicker">Debug mode</p>
+				<h1>Gooey toast playground</h1>
+				<p>
+					Rychly panel pro overeni aktualni implementace. Muzes testovat vsechny
+					stavy, promise scenare, pozice, autopilot i rucni dismiss.
+				</p>
+				<p id="runtimeInfo" class="runtime"></p>
+			</section>
+
+			<section class="card controls">
+				<h2>Toast akce</h2>
+				<div class="button-grid">
+					<button type="button" data-toast-state="success">Success</button>
+					<button type="button" data-toast-state="error">Error</button>
+					<button type="button" data-toast-state="warning">Warning</button>
+					<button type="button" data-toast-state="info">Info</button>
+					<button type="button" data-toast-state="action">Action</button>
+					<button type="button" data-action="update-last">Update posledni</button>
+					<button type="button" data-action="dismiss-last">Dismiss posledni</button>
+					<button type="button" data-action="burst">Burst x5</button>
+				</div>
+				<div class="button-row">
+					<button type="button" data-action="promise-success">Promise success</button>
+					<button type="button" data-action="promise-error">Promise error</button>
+					<button type="button" data-action="smoke-suite">Spustit smoke suite</button>
+					<button type="button" data-action="clear-all" class="ghost">Clear all</button>
+				</div>
+			</section>
+
+			<section class="card config">
+				<h2>Konfigurace</h2>
+				<div class="config-grid">
+					<label>
+						<span>Pozice</span>
+						<select id="positionSelect">
+							<option value="top-left">top-left</option>
+							<option value="top-center">top-center</option>
+							<option value="top-right" selected>top-right</option>
+							<option value="bottom-left">bottom-left</option>
+							<option value="bottom-center">bottom-center</option>
+							<option value="bottom-right">bottom-right</option>
+						</select>
+					</label>
+					<label>
+						<span>Duration (ms)</span>
+						<input id="durationInput" type="number" min="0" step="100" value="6000" />
+					</label>
+					<label>
+						<span>Roundness</span>
+						<input id="roundnessInput" type="number" min="0" step="1" value="18" />
+					</label>
+					<label>
+						<span>Fill</span>
+						<input id="fillInput" type="color" value="#ffffff" />
+					</label>
+					<label class="checkbox">
+						<input id="descriptionToggle" type="checkbox" checked />
+						<span>Pridat description</span>
+					</label>
+					<label class="checkbox">
+						<input id="buttonToggle" type="checkbox" checked />
+						<span>Pridat action button</span>
+					</label>
+					<label class="checkbox">
+						<input id="autopilotToggle" type="checkbox" checked />
+						<span>Pouzit autopilot</span>
+					</label>
+					<label>
+						<span>Expand delay (ms)</span>
+						<input id="autopilotExpandInput" type="number" min="0" step="50" value="150" />
+					</label>
+					<label>
+						<span>Collapse delay (ms)</span>
+						<input
+							id="autopilotCollapseInput"
+							type="number"
+							min="0"
+							step="50"
+							value="4000"
+						/>
+					</label>
+				</div>
+			</section>
+
+			<section class="card snapshot">
+				<div class="card-head">
+					<h2>Live snapshot</h2>
+					<button type="button" id="refreshSnapshotBtn" class="ghost">Refresh</button>
+				</div>
+				<pre id="snapshotOutput"></pre>
+			</section>
+
+			<section class="card log">
+				<div class="card-head">
+					<h2>Event log</h2>
+					<button type="button" id="clearLogBtn" class="ghost">Vymazat</button>
+				</div>
+				<ol id="logOutput"></ol>
+			</section>
+		</main>
+
+		<script type="module" src="./.build/main.js"></script>
+	</body>
+</html>

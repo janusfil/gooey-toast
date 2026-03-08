@@ -77,6 +77,27 @@ const save = async () => {
 - `configureToaster(options)`
 - `unmountToaster()`
 
+## Debug playground
+
+When you need to verify and tune the current toast behavior locally, use the built-in playground:
+
+```bash
+npm run playground
+```
+
+Then open `http://localhost:8080/playground/index.html`.
+
+It includes:
+
+- quick actions for each `toast.*` state
+- promise success/error scenarios
+- controls for position, duration, roundness, fill, and autopilot timings
+- live snapshot of DOM state (`[data-gooey-toast]`, viewport counts, CSS vars)
+- event log for lifecycle checks
+
+The playground also exposes helper functions in the browser console via
+`window.__gooeyToastDebug` (`snapshot()`, `logs()`, `burst()`, `dismissLast()`, `clear()`).
+
 ## Styling
 
 The package ships with `styles.css` and uses stable data attributes like `[data-gooey-toast]` for targeting. You can also pass class names through `options.styles` to style title, description, badge, and button per toast.

@@ -40,9 +40,12 @@
 		"build:ts": "tsc",
 		"build:css": "node -e \"require('node:fs').copyFileSync('src/styles.css', 'dist/styles.css')\"",
 		"build": "npm run clean && npm run build:ts && npm run build:css",
-		"dev": "tsc --watch --preserveWatchOutput"
+		"dev": "tsc --watch --preserveWatchOutput",
+		"playground": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap --servedir=. --serve=8080 --watch",
+		"playground:build": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap"
 	},
 	"devDependencies": {
+		"esbuild": "^0.25.9",
 		"typescript": "^5.9.2"
 	}
 }
