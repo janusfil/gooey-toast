@@ -160,6 +160,8 @@
 
 [data-gooey-title] {
 	--_tone: var(--gooey-state-success);
+	display: block;
+	min-width: 0;
 	font-size: 0.875rem;
 	line-height: 1.1rem;
 	font-weight: 600;
@@ -168,6 +170,20 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	text-transform: capitalize;
+}
+
+[data-gooey-title-measure] {
+	position: absolute;
+	left: -9999px;
+	top: 0;
+	display: inline-block;
+	width: max-content;
+	max-width: none;
+	white-space: nowrap;
+	overflow: visible;
+	text-overflow: clip;
+	visibility: hidden;
+	pointer-events: none;
 }
 
 :is([data-gooey-badge], [data-gooey-title])[data-state="loading"] {

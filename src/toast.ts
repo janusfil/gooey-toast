@@ -265,6 +265,7 @@ class ToastView {
 	private readonly headerEl: HTMLDivElement;
 	private readonly badgeEl: HTMLDivElement;
 	private readonly titleEl: HTMLSpanElement;
+	private readonly titleMeasureEl: HTMLSpanElement;
 	private readonly contentEl: HTMLDivElement;
 	private readonly descriptionEl: HTMLDivElement;
 	private sizeObserver: ResizeObserver | null = null;
@@ -372,6 +373,10 @@ class ToastView {
 		this.titleEl = document.createElement("span");
 		this.titleEl.setAttribute("data-gooey-title", "");
 
+		this.titleMeasureEl = document.createElement("span");
+		this.titleMeasureEl.setAttribute("data-gooey-title", "");
+		this.titleMeasureEl.setAttribute("data-gooey-title-measure", "");
+
 		this.headerEl.append(this.badgeEl, this.titleEl);
 
 		this.contentEl = document.createElement("div");
@@ -382,7 +387,7 @@ class ToastView {
 		this.descriptionEl.setAttribute("data-gooey-description", "");
 
 		this.contentEl.append(this.descriptionEl);
-		this.root.append(this.canvasEl, this.headerEl, this.contentEl);
+		this.root.append(this.canvasEl, this.headerEl, this.contentEl, this.titleMeasureEl);
 
 		this.root.addEventListener("mouseenter", this.handleMouseEnter);
 		this.root.addEventListener("mouseleave", this.handleMouseLeave);
@@ -486,6 +491,10 @@ class ToastView {
 		this.titleEl.className = item.styles?.title ?? "";
 		this.titleEl.textContent = title;
 
+		this.titleMeasureEl.dataset.state = state;
+		this.titleMeasureEl.className = item.styles?.title ?? "";
+		this.titleMeasureEl.textContent = title;
+
 		this.descriptionEl.className = item.styles?.description ?? "";
 		this.descriptionEl.replaceChildren();
 
@@ -549,7 +558,7 @@ class ToastView {
 			this.containerWidth = Math.max(1, Math.round(width));
 		}
 
-		const nextHeaderWidth = Math.ceil(this.headerEl.scrollWidth);
+		const nextHeaderWidth = this.measureHeaderWidth();
 		if (nextHeaderWidth > 0) {
 			this.headerWidth = clamp(nextHeaderWidth, TOAST_HEIGHT, this.containerWidth);
 		}
@@ -559,6 +568,24 @@ class ToastView {
 			: 0;
 
 		this.applyGeometry();
+	}
+
+	private measureHeaderWidth() {
+		const styles = window.getComputedStyle(this.headerEl);
+		const gapRaw =
+			styles.columnGap && styles.columnGap !== "normal" ? styles.columnGap : styles.gap;
+		const gap = Number.parseFloat(gapRaw || "0") || 0;
+		const paddingLeft = Number.parseFloat(styles.paddingLeft || "0") || 0;
+		const paddingRight = Number.parseFloat(styles.paddingRight || "0") || 0;
+
+		const badgeWidth = this.badgeEl.getBoundingClientRect().width;
+		const titleWidth = Math.max(
+			this.titleMeasureEl.getBoundingClientRect().width,
+			this.titleEl.scrollWidth,
+		);
+		const safety = 2;
+
+		return Math.ceil(badgeWidth + titleWidth + gap + paddingLeft + paddingRight + safety);
 	}
 
 	private alignedX(width: number) {
