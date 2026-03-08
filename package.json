@@ -54,7 +54,7 @@
 		"playground:build": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap"
 	},
 	"devDependencies": {
-		"esbuild": "^0.25.9",
+		"esbuild": "^0.27.3",
 		"typescript": "^5.9.2"
 	}
 }
