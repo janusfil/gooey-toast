@@ -90,6 +90,57 @@ const save = async () => {
 - `configureToaster(options)`
 - `unmountToaster()`
 
+## Options reference
+
+### `ToastOptions`
+
+Used by `toast.show`, `toast.success`, `toast.error`, `toast.warning`, `toast.info`, and
+`toast.action`.
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `id` | `string` | auto-generated | Stable toast id. Reusing an existing id updates that toast instead of adding a new one. |
+| `title` | `string` | current state label (`"success"`, `"error"`, etc.) | Main one-line label shown in the header pill. |
+| `description` | `string \| number \| Node \| DocumentFragment \| (() => value)` | hidden/collapsed | Expandable body content under the header. |
+| `position` | `"top-left" \| "top-center" \| "top-right" \| "bottom-left" \| "bottom-center" \| "bottom-right"` | toaster default (`"top-right"` by default) | Per-toast placement override. |
+| `duration` | `number \| null` | `6000` ms | Auto-dismiss timeout. Use `null` (or `<= 0`) to disable auto-dismiss. |
+| `icon` | `ToastRenderable \| null` | state icon | Custom icon content shown in the badge. |
+| `styles` | `{ title?, description?, badge?, button? }` | none | Optional class names for per-part styling. |
+| `fill` | `string` | `#FFFFFF` | Fill color for gooey SVG background shapes. |
+| `roundness` | `number` | `18` | Corner radius used by header/body gooey shapes. |
+| `autopilot` | `boolean \| { expand?: number; collapse?: number }` | enabled; `expand: 150`, `collapse: 4000` | Automatic expand/collapse timings for toasts with content. Use `false` to disable. |
+| `button` | `{ title: string; onClick: () => void }` | none | Renders action button inside description area. |
+
+### `ToastPromiseOptions<T>`
+
+Used by `toast.promise(promiseOrFactory, options)`.
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `loading` | `{ title?: string; icon?: ToastRenderable \| null }` | required | Initial loading toast. Internally uses `duration: null` while pending. |
+| `success` | `ToastOptions \| (data: T) => ToastOptions` | required | Toast config when promise resolves (unless `action` is provided). |
+| `error` | `ToastOptions \| (err: unknown) => ToastOptions` | required | Toast config when promise rejects. |
+| `action` | `ToastOptions \| (data: T) => ToastOptions` | none | If set and promise resolves, this branch is used instead of `success`. |
+| `position` | `ToastPosition` | toaster default | Position for the whole promise lifecycle toast id. |
+
+### `ToasterOptions`
+
+Used by `mountToaster`, `createToaster`, and `configureToaster`.
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `target` | `HTMLElement` | `document.body` | DOM container where viewport sections are mounted. |
+| `position` | `ToastPosition` | `"top-right"` | Default position for new toasts without explicit `position`. |
+| `offset` | `number \| string \| { top?, right?, bottom?, left? }` | none | Custom viewport offsets (`px` if number). |
+| `options` | `Partial<ToastOptions>` | none | Global default toast options merged into every toast call. |
+
+### Behavior defaults
+
+- Hover pauses dismiss timers; leaving resumes timers.
+- `description` content is collapsed by default and expands on hover/autopilot.
+- Swipe up/down beyond ~`30px` dismisses a toast.
+- `toast.*` auto-mounts a default toaster if you do not mount one manually.
+
 ## Debug playground
 
 When you need to verify and tune the current toast behavior locally, use the built-in playground:
