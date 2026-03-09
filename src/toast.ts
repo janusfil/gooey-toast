@@ -15,7 +15,7 @@ import {
 } from "./types";
 
 const DEFAULT_DURATION = 6000;
-const EXIT_DURATION = 180;
+const EXIT_DURATION = 260;
 const AUTO_EXPAND_DELAY = 150;
 const AUTO_COLLAPSE_DELAY = 4000;
 const SWIPE_DISMISS_DISTANCE = 30;
@@ -37,6 +37,10 @@ interface ToastRecord extends InternalToastOptions {
 	exiting: boolean;
 	autoExpandDelayMs?: number;
 	autoCollapseDelayMs?: number;
+}
+
+interface ExitTimerRecord {
+	remove?: number;
 }
 
 interface ToastPlacement {
@@ -178,7 +182,7 @@ const updateToast = (id: string, options: InternalToastOptions) => {
 	store.update((all) => all.map((item) => (item.id === id ? next : item)));
 };
 
-const exitTimers = new Map<string, number>();
+const exitTimers = new Map<string, ExitTimerRecord>();
 
 const dismissToast = (id: string) => {
 	const existing = store.toasts.find((item) => item.id === id);
@@ -190,12 +194,13 @@ const dismissToast = (id: string) => {
 		all.map((item) => (item.id === id ? { ...item, exiting: true } : item)),
 	);
 
-	const prevTimer = exitTimers.get(key);
-	if (prevTimer != null) {
-		clearTimeout(prevTimer);
+	const prevTimers = exitTimers.get(key);
+	if (prevTimers?.remove != null) {
+		clearTimeout(prevTimers.remove);
 	}
 
-	const timer = window.setTimeout(() => {
+	const timers: ExitTimerRecord = {};
+	timers.remove = window.setTimeout(() => {
 		exitTimers.delete(key);
 		store.update((all) =>
 			all.filter(
@@ -204,7 +209,7 @@ const dismissToast = (id: string) => {
 		);
 	}, EXIT_DURATION);
 
-	exitTimers.set(key, timer);
+	exitTimers.set(key, timers);
 };
 
 const resolveRenderableValue = (
@@ -450,11 +455,15 @@ class ToastView {
 
 		this.render(item);
 
-		if (item.exiting || !this.canExpand()) {
+		if (!item.exiting && !this.canExpand()) {
 			this.setExpanded(false);
 		}
 
-		this.refreshAutopilot();
+		if (item.exiting) {
+			this.clearAutoPilotTimers();
+		} else {
+			this.refreshAutopilot();
+		}
 	}
 
 	destroy() {
@@ -572,12 +581,16 @@ class ToastView {
 		this.root.dataset.timeoutPaused = String(paused);
 		this.timeoutTrackEl.hidden = !visible;
 		this.timeoutFillEl.style.transform = `scaleX(${clamp(progress, 0, 1)})`;
+  }
+
+	private hasExpandableContent() {
+		return this.hasContent && (this.currentItem.state ?? "success") !== "loading";
 	}
 
 	private canExpand() {
-		if (!this.hasContent) return false;
+		if (!this.hasExpandableContent()) return false;
 		if (this.currentItem.exiting) return false;
-		return (this.currentItem.state ?? "success") !== "loading";
+		return true;
 	}
 
 	private setExpanded(next: boolean) {
@@ -639,9 +652,10 @@ class ToastView {
 	}
 
 	private applyGeometry() {
-		const canOpen = this.expanded && this.canExpand();
+		const canOpen = this.expanded && this.hasExpandableContent();
 		const visibleContentHeight = canOpen ? this.contentHeight : 0;
-		const totalHeight = TOAST_HEIGHT + visibleContentHeight;
+		const visualHeight = TOAST_HEIGHT + visibleContentHeight;
+		const totalHeight = visualHeight;
 		const headerWidth = clamp(this.headerWidth, TOAST_HEIGHT, this.containerWidth);
 		const bodyWidth = this.hasContent ? this.containerWidth : headerWidth;
 
@@ -650,7 +664,7 @@ class ToastView {
 
 		const isTopEdge = this.placement.edge === "top";
 		const bodyHeight = canOpen ? visibleContentHeight + GOOEY_JOIN : 0;
-		const pillY = isTopEdge ? 0 : totalHeight - TOAST_HEIGHT;
+		const pillY = isTopEdge ? 0 : visualHeight - TOAST_HEIGHT;
 		const bodyY = isTopEdge ? TOAST_HEIGHT - GOOEY_JOIN : 0;
 
 		const roundness = Math.max(0, this.currentItem.roundness ?? DEFAULT_ROUNDNESS);
@@ -666,8 +680,8 @@ class ToastView {
 		this.contentEl.dataset.visible = String(canOpen);
 
 		this.svgEl.setAttribute("width", String(this.containerWidth));
-		this.svgEl.setAttribute("height", String(totalHeight));
-		this.svgEl.setAttribute("viewBox", `0 0 ${this.containerWidth} ${totalHeight}`);
+		this.svgEl.setAttribute("height", String(visualHeight));
+		this.svgEl.setAttribute("viewBox", `0 0 ${this.containerWidth} ${visualHeight}`);
 		this.blurNode.setAttribute("stdDeviation", String(blur));
 
 		this.pillRect.setAttribute("x", String(headerX));
