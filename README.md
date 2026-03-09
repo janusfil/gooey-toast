@@ -7,7 +7,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/janusfil/gooey-toast?display_name=tag)](https://github.com/janusfil/gooey-toast/releases)
 [![License](https://img.shields.io/npm/l/gooey-toast)](./LICENSE)
 
+<video src="./gooey-toast.mp4" controls muted playsinline loop></video>
+
 A framework-agnostic, physics-inspired toast notification package.
+
+Inspired by the original React [Sileo](https://github.com/hiaaryan/sileo) project by Aryan Arora, this package brings the same gooey toast feel to framework-agnostic apps.
 
 - No React/Vue peer dependency
 - Works in Vue, React, Svelte, Astro, vanilla JS, and more
@@ -152,7 +156,7 @@ When you need to verify and tune the current toast behavior locally, use the bui
 npm run playground
 ```
 
-Then open `http://localhost:8080/playground/index.html`.
+Then open `http://localhost:8080`.
 
 It includes:
 
