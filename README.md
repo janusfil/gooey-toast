@@ -136,6 +136,7 @@ Used by `mountToaster`, `createToaster`, and `configureToaster`.
 
 ### Behavior defaults
 
+- Dismissed toasts animate out before leaving the stack.
 - Hover pauses dismiss timers; leaving resumes timers.
 - `description` content is collapsed by default and expands on hover/autopilot.
 - Swipe up/down beyond ~`30px` dismisses a toast.
