@@ -54,6 +54,13 @@ interface ToastViewCallbacks {
 	onDismiss: (id: string) => void;
 }
 
+interface DismissState {
+	timer: number | null;
+	duration: number;
+	remaining: number;
+	startedAt: number | null;
+}
+
 type ToastListener = (toasts: ToastRecord[]) => void;
 
 const store = {
@@ -84,6 +91,14 @@ const generateId = () =>
 
 const normalizeDuration = (value: number | null | undefined) =>
 	value === undefined ? DEFAULT_DURATION : value;
+
+const isTimedDuration = (value: number | null | undefined): value is number =>
+	value != null && value > 0;
+
+const getNow = () =>
+	typeof performance !== "undefined" && typeof performance.now === "function"
+		? performance.now()
+		: Date.now();
 
 const timeoutKey = (item: ToastRecord) => `${item.id}:${item.instanceId}`;
 
@@ -271,6 +286,8 @@ class ToastView {
 	private readonly badgeEl: HTMLDivElement;
 	private readonly titleEl: HTMLSpanElement;
 	private readonly titleMeasureEl: HTMLSpanElement;
+	private readonly timeoutTrackEl: HTMLSpanElement;
+	private readonly timeoutFillEl: HTMLSpanElement;
 	private readonly contentEl: HTMLDivElement;
 	private readonly descriptionEl: HTMLDivElement;
 	private sizeObserver: ResizeObserver | null = null;
@@ -382,7 +399,15 @@ class ToastView {
 		this.titleMeasureEl.setAttribute("data-gooey-title", "");
 		this.titleMeasureEl.setAttribute("data-gooey-title-measure", "");
 
-		this.headerEl.append(this.badgeEl, this.titleEl);
+		this.timeoutTrackEl = document.createElement("span");
+		this.timeoutTrackEl.setAttribute("data-gooey-time-track", "");
+		this.timeoutTrackEl.hidden = true;
+
+		this.timeoutFillEl = document.createElement("span");
+		this.timeoutFillEl.setAttribute("data-gooey-time-fill", "");
+
+		this.timeoutTrackEl.append(this.timeoutFillEl);
+		this.headerEl.append(this.badgeEl, this.titleEl, this.timeoutTrackEl);
 
 		this.contentEl = document.createElement("div");
 		this.contentEl.setAttribute("data-gooey-content", "");
@@ -474,6 +499,8 @@ class ToastView {
 	private render(item: ToastRecord) {
 		const state = item.state ?? "success";
 		const title = item.title ?? state;
+		const showTimeoutIndicator =
+			Boolean(item.timeoutIndicator) && isTimedDuration(item.duration) && !item.exiting;
 
 		this.root.dataset.state = state;
 
@@ -503,6 +530,10 @@ class ToastView {
 		this.titleMeasureEl.dataset.state = state;
 		this.titleMeasureEl.className = item.styles?.title ?? "";
 		this.titleMeasureEl.textContent = title;
+
+		this.timeoutTrackEl.dataset.state = state;
+		this.timeoutFillEl.dataset.state = state;
+		this.setTimeoutIndicator(showTimeoutIndicator, 1, false);
 
 		this.descriptionEl.className = item.styles?.description ?? "";
 		this.descriptionEl.replaceChildren();
@@ -544,6 +575,13 @@ class ToastView {
 		});
 		return action;
 	}
+
+	setTimeoutIndicator(visible: boolean, progress: number, paused: boolean) {
+		this.root.dataset.timeoutIndicator = String(visible);
+		this.root.dataset.timeoutPaused = String(paused);
+		this.timeoutTrackEl.hidden = !visible;
+		this.timeoutFillEl.style.transform = `scaleX(${clamp(progress, 0, 1)})`;
+  }
 
 	private hasExpandableContent() {
 		return this.hasContent && (this.currentItem.state ?? "success") !== "loading";
@@ -777,7 +815,8 @@ class ToasterManager {
 
 	private readonly viewports = new Map<ToastPosition, HTMLElement>();
 	private readonly views = new Map<string, ToastView>();
-	private readonly timers = new Map<string, number>();
+	private readonly dismissStates = new Map<string, DismissState>();
+	private indicatorRaf: number | null = null;
 
 	private readonly listener: ToastListener;
 	private mounted = true;
@@ -830,7 +869,8 @@ class ToasterManager {
 		this.mounted = false;
 
 		store.listeners.delete(this.listener);
-		this.clearDismissTimers();
+		this.clearDismissStates();
+		this.stopIndicatorUpdates();
 
 		if (this.hoverResumeTimer != null) {
 			clearTimeout(this.hoverResumeTimer);
@@ -903,14 +943,20 @@ class ToasterManager {
 			}
 		}
 
-		const timerKeys = new Set(
-			toasts.filter((item) => !item.exiting).map((item) => timeoutKey(item)),
-		);
+		const dismissKeys = new Set<string>();
 
-		for (const [key, timer] of this.timers) {
-			if (!timerKeys.has(key)) {
-				clearTimeout(timer);
-				this.timers.delete(key);
+		for (const toast of toasts) {
+			const duration = normalizeDuration(toast.duration);
+			if (!toast.exiting && isTimedDuration(duration)) {
+				const key = timeoutKey(toast);
+				dismissKeys.add(key);
+				this.ensureDismissState(toast, key, duration);
+			}
+		}
+
+		for (const key of Array.from(this.dismissStates.keys())) {
+			if (!dismissKeys.has(key)) {
+				this.deleteDismissState(key);
 			}
 		}
 
@@ -919,6 +965,7 @@ class ToasterManager {
 		}
 
 		this.scheduleDismiss(toasts);
+		this.syncTimeoutIndicators(toasts);
 	}
 
 	private ensureViewport(position: ToastPosition) {
@@ -982,6 +1029,101 @@ class ToasterManager {
 				: "";
 	}
 
+	private ensureDismissState(
+		toast: ToastRecord,
+		key = timeoutKey(toast),
+		duration = normalizeDuration(toast.duration),
+	) {
+		if (toast.exiting || !isTimedDuration(duration)) {
+			return null;
+		}
+
+		const existing = this.dismissStates.get(key);
+		if (existing) {
+			return existing;
+		}
+
+		const state: DismissState = {
+			timer: null,
+			duration,
+			remaining: duration,
+			startedAt: null,
+		};
+
+		this.dismissStates.set(key, state);
+		return state;
+	}
+
+	private deleteDismissState(key: string) {
+		const state = this.dismissStates.get(key);
+		if (!state) return;
+
+		if (state.timer != null) {
+			clearTimeout(state.timer);
+		}
+
+		this.dismissStates.delete(key);
+	}
+
+	private clearDismissStates() {
+		for (const key of Array.from(this.dismissStates.keys())) {
+			this.deleteDismissState(key);
+		}
+	}
+
+	private getRemainingMs(state: DismissState, timestamp = getNow()) {
+		if (state.startedAt == null) {
+			return clamp(state.remaining, 0, state.duration);
+		}
+
+		return clamp(state.remaining - (timestamp - state.startedAt), 0, state.duration);
+	}
+
+	private stopIndicatorUpdates() {
+		if (this.indicatorRaf != null) {
+			cancelAnimationFrame(this.indicatorRaf);
+			this.indicatorRaf = null;
+		}
+	}
+
+	private syncTimeoutIndicators(toasts: ToastRecord[]) {
+		this.stopIndicatorUpdates();
+
+		const currentTime = getNow();
+		let needsRaf = false;
+
+		for (const toast of toasts) {
+			const view = this.views.get(toast.id);
+			if (!view) continue;
+
+			const duration = normalizeDuration(toast.duration);
+			const visible = Boolean(toast.timeoutIndicator) && !toast.exiting && isTimedDuration(duration);
+
+			if (!visible) {
+				view.setTimeoutIndicator(false, 1, false);
+				continue;
+			}
+
+			const state = this.dismissStates.get(timeoutKey(toast));
+			const remaining = state ? this.getRemainingMs(state, currentTime) : duration;
+			const progress = remaining / duration;
+			const paused = this.hovering || state?.timer == null;
+
+			view.setTimeoutIndicator(true, progress, paused);
+
+			if (!paused && progress > 0) {
+				needsRaf = true;
+			}
+		}
+
+		if (needsRaf) {
+			this.indicatorRaf = requestAnimationFrame(() => {
+				this.indicatorRaf = null;
+				this.syncTimeoutIndicators(store.toasts);
+			});
+		}
+	}
+
 	private scheduleDismiss(toasts: ToastRecord[]) {
 		if (this.hovering) return;
 
@@ -989,25 +1131,34 @@ class ToasterManager {
 			if (toast.exiting) continue;
 
 			const duration = normalizeDuration(toast.duration);
-			if (duration == null || duration <= 0) continue;
+			if (!isTimedDuration(duration)) continue;
 
 			const key = timeoutKey(toast);
-			if (this.timers.has(key)) continue;
+			const state = this.ensureDismissState(toast, key, duration);
+			if (!state || state.timer != null) continue;
 
-			const timer = window.setTimeout(() => {
-				this.timers.delete(key);
+			state.remaining = clamp(state.remaining, 0, state.duration);
+			state.startedAt = getNow();
+
+			state.timer = window.setTimeout(() => {
+				this.deleteDismissState(key);
 				dismissToast(toast.id);
-			}, duration);
-
-			this.timers.set(key, timer);
+				this.syncTimeoutIndicators(store.toasts);
+			}, state.remaining);
 		}
 	}
 
-	private clearDismissTimers() {
-		for (const timer of this.timers.values()) {
-			clearTimeout(timer);
+	private pauseDismissTimers() {
+		const currentTime = getNow();
+
+		for (const state of this.dismissStates.values()) {
+			if (state.timer == null) continue;
+
+			clearTimeout(state.timer);
+			state.remaining = this.getRemainingMs(state, currentTime);
+			state.startedAt = null;
+			state.timer = null;
 		}
-		this.timers.clear();
 	}
 
 	private handleEnter() {
@@ -1018,7 +1169,8 @@ class ToasterManager {
 
 		if (!this.hovering) {
 			this.hovering = true;
-			this.clearDismissTimers();
+			this.pauseDismissTimers();
+			this.syncTimeoutIndicators(store.toasts);
 		}
 	}
 
@@ -1036,6 +1188,7 @@ class ToasterManager {
 
 			this.hovering = false;
 			this.scheduleDismiss(store.toasts);
+			this.syncTimeoutIndicators(store.toasts);
 		}, HOVER_RESUME_DELAY);
 	}
 

@@ -65,6 +65,7 @@ const fillInput = getById<HTMLInputElement>("fillInput");
 const descriptionToggle = getById<HTMLInputElement>("descriptionToggle");
 const buttonToggle = getById<HTMLInputElement>("buttonToggle");
 const autopilotToggle = getById<HTMLInputElement>("autopilotToggle");
+const timeoutIndicatorToggle = getById<HTMLInputElement>("timeoutIndicatorToggle");
 const autopilotExpandInput = getById<HTMLInputElement>("autopilotExpandInput");
 const autopilotCollapseInput = getById<HTMLInputElement>("autopilotCollapseInput");
 const refreshSnapshotBtn = getById<HTMLButtonElement>("refreshSnapshotBtn");
@@ -199,6 +200,7 @@ const buildOptions = (state: ToastStateButton): ToastOptions => {
 		description: withDescription ? STATE_DESCRIPTIONS[state] : undefined,
 		position: readPosition(),
 		duration: readNumber(durationInput, 6000, { min: 0 }),
+		timeoutIndicator: timeoutIndicatorToggle.checked,
 		roundness: readNumber(roundnessInput, 18, { min: 0 }),
 		fill: fillInput.value,
 		autopilot: readAutopilot(),
@@ -235,6 +237,7 @@ const createStateToast = (state: ToastStateButton) => {
 		id,
 		position: options.position,
 		duration: options.duration,
+		timeoutIndicator: options.timeoutIndicator,
 		autopilot: options.autopilot,
 	});
 	scheduleSnapshotRefresh();
@@ -315,6 +318,7 @@ const runPromise = async (ok: boolean) => {
 				title: "Upload complete",
 				description: `Server id: ${data.requestId}`,
 				duration: readNumber(durationInput, 6000, { min: 0 }),
+				timeoutIndicator: timeoutIndicatorToggle.checked,
 				autopilot: readAutopilot(),
 			}),
 			error: (error) => ({
@@ -324,6 +328,7 @@ const runPromise = async (ok: boolean) => {
 						? error.message
 						: "Unknown promise rejection in simulation",
 				duration: readNumber(durationInput, 6000, { min: 0 }),
+				timeoutIndicator: timeoutIndicatorToggle.checked,
 				autopilot: readAutopilot(),
 			}),
 		});

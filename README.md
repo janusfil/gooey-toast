@@ -12,6 +12,7 @@ A framework-agnostic, physics-inspired toast notification package.
 - No React/Vue peer dependency
 - Works in Vue, React, Svelte, Astro, vanilla JS, and more
 - Keeps the gooey SVG + spring motion style
+- Optional visual timeout bar for auto-dismiss toasts
 
 ## Installation
 
@@ -104,6 +105,7 @@ Used by `toast.show`, `toast.success`, `toast.error`, `toast.warning`, `toast.in
 | `description` | `string \| number \| Node \| DocumentFragment \| (() => value)` | hidden/collapsed | Expandable body content under the header. |
 | `position` | `"top-left" \| "top-center" \| "top-right" \| "bottom-left" \| "bottom-center" \| "bottom-right"` | toaster default (`"top-right"` by default) | Per-toast placement override. |
 | `duration` | `number \| null` | `6000` ms | Auto-dismiss timeout. Use `null` (or `<= 0`) to disable auto-dismiss. |
+| `timeoutIndicator` | `boolean` | `false` | Shows a subtle countdown bar inside the toast header for finite durations. It pauses together with the dismiss timer on hover. |
 | `icon` | `ToastRenderable \| null` | state icon | Custom icon content shown in the badge. |
 | `styles` | `{ title?, description?, badge?, button? }` | none | Optional class names for per-part styling. |
 | `fill` | `string` | `#FFFFFF` | Fill color for gooey SVG background shapes. |
@@ -136,8 +138,8 @@ Used by `mountToaster`, `createToaster`, and `configureToaster`.
 
 ### Behavior defaults
 
+- Hover pauses dismiss timers and timeout bars; leaving resumes from the remaining time.
 - Dismissed toasts animate out before leaving the stack.
-- Hover pauses dismiss timers; leaving resumes timers.
 - `description` content is collapsed by default and expands on hover/autopilot.
 - Swipe up/down beyond ~`30px` dismisses a toast.
 - `toast.*` auto-mounts a default toaster if you do not mount one manually.

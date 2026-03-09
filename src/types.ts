@@ -52,6 +52,7 @@ export interface ToastOptions {
 	description?: ToastRenderable;
 	position?: ToastPosition;
 	duration?: number | null;
+	timeoutIndicator?: boolean;
 	icon?: ToastRenderable | null;
 	styles?: ToastStyles;
 	fill?: string;
