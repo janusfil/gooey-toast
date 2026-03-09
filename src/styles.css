@@ -90,10 +90,9 @@
 }
 
 [data-gooey-toast][data-exiting="true"] {
-	opacity: 0;
+	overflow: hidden;
 	pointer-events: none;
-	transform: translate3d(0, calc(var(--_entry-y) + var(--gooey-drag-y, 0px)), 0)
-		scale(0.98);
+	animation: gooey-exit calc(var(--gooey-duration) * 0.8) var(--gooey-ease) forwards;
 }
 
 [data-gooey-toast][data-state="loading"] {
@@ -293,6 +292,19 @@
 @keyframes gooey-spin {
 	to {
 		rotate: 360deg;
+	}
+}
+
+@keyframes gooey-exit {
+	from {
+		opacity: 1;
+		transform: translate3d(0, var(--gooey-drag-y, 0px), 0) scale(1);
+	}
+
+	to {
+		opacity: 0;
+		transform: translate3d(0, calc(var(--_entry-y) + var(--gooey-drag-y, 0px)), 0)
+			scale(0.98);
 	}
 }
 
