@@ -172,6 +172,49 @@
 	text-transform: capitalize;
 }
 
+[data-gooey-time-track] {
+	--_tone: var(--gooey-state-success);
+	position: absolute;
+	left: 0.75rem;
+	right: 0.75rem;
+	bottom: 0.38rem;
+	display: block;
+	height: 2px;
+	border-radius: 9999px;
+	overflow: hidden;
+	background: color-mix(in oklch, var(--_tone) 18%, transparent);
+	opacity: 0;
+	transform: translateY(2px);
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease;
+	pointer-events: none;
+}
+
+[data-gooey-time-fill] {
+	--_tone: var(--gooey-state-success);
+	display: block;
+	width: 100%;
+	height: 100%;
+	border-radius: inherit;
+	background: color-mix(in oklch, var(--_tone) 72%, white 8%);
+	transform: scaleX(1);
+	transform-origin: left center;
+}
+
+[data-gooey-toast][data-timeout-indicator="true"] [data-gooey-time-track] {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+[data-gooey-toast][data-timeout-paused="true"] [data-gooey-time-track] {
+	opacity: 0.72;
+}
+
+[data-gooey-toast][data-position="right"] [data-gooey-time-fill] {
+	transform-origin: right center;
+}
+
 [data-gooey-title-measure] {
 	position: absolute;
 	left: -9999px;
@@ -186,23 +229,48 @@
 	pointer-events: none;
 }
 
-:is([data-gooey-badge], [data-gooey-title])[data-state="loading"] {
+:is(
+		[data-gooey-badge],
+		[data-gooey-title],
+		[data-gooey-time-track],
+		[data-gooey-time-fill]
+	)[data-state="loading"] {
 	--_tone: var(--gooey-state-loading);
 }
 
-:is([data-gooey-badge], [data-gooey-title])[data-state="error"] {
+:is(
+		[data-gooey-badge],
+		[data-gooey-title],
+		[data-gooey-time-track],
+		[data-gooey-time-fill]
+	)[data-state="error"] {
 	--_tone: var(--gooey-state-error);
 }
 
-:is([data-gooey-badge], [data-gooey-title])[data-state="warning"] {
+:is(
+		[data-gooey-badge],
+		[data-gooey-title],
+		[data-gooey-time-track],
+		[data-gooey-time-fill]
+	)[data-state="warning"] {
 	--_tone: var(--gooey-state-warning);
 }
 
-:is([data-gooey-badge], [data-gooey-title])[data-state="info"] {
+:is(
+		[data-gooey-badge],
+		[data-gooey-title],
+		[data-gooey-time-track],
+		[data-gooey-time-fill]
+	)[data-state="info"] {
 	--_tone: var(--gooey-state-info);
 }
 
-:is([data-gooey-badge], [data-gooey-title])[data-state="action"] {
+:is(
+		[data-gooey-badge],
+		[data-gooey-title],
+		[data-gooey-time-track],
+		[data-gooey-time-fill]
+	)[data-state="action"] {
 	--_tone: var(--gooey-state-action);
 }
 
