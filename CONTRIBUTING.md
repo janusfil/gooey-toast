@@ -32,8 +32,9 @@ Before opening a PR, please:
 - Merge as many PRs as needed into `main`; do not cut a release until you are ready
   for the next package version.
 - Git tags in the `vX.Y.Z` format trigger automated publishing.
-- The publish workflow validates the tag, publishes to npm, publishes a scoped
-  mirror to GitHub Packages, and creates a GitHub Release.
+- The publish workflow validates the tag, publishes to npm, attaches a release
+  tarball plus `sha256sum.txt`, emits build provenance, and creates a GitHub
+  Release.
 - Generated release notes aggregate everything merged since the previous tag, so
   multiple PRs naturally end up in one changelog/release if they ship together.
 
