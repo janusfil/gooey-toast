@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/janusfil/gooey-toast/ci.yml?branch=main&label=ci)](https://github.com/janusfil/gooey-toast/actions/workflows/ci.yml)
 [![Publish](https://img.shields.io/github/actions/workflow/status/janusfil/gooey-toast/publish.yml?label=publish)](https://github.com/janusfil/gooey-toast/actions/workflows/publish.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/janusfil/gooey-toast/badge)](https://scorecard.dev/viewer/?uri=github.com/janusfil/gooey-toast)
 [![npm version](https://img.shields.io/npm/v/gooey-toast?logo=npm)](https://www.npmjs.com/package/gooey-toast)
 [![npm downloads](https://img.shields.io/npm/dm/gooey-toast?logo=npm)](https://www.npmjs.com/package/gooey-toast)
 [![GitHub release](https://img.shields.io/github/v/release/janusfil/gooey-toast?display_name=tag)](https://github.com/janusfil/gooey-toast/releases)
@@ -24,10 +25,10 @@ Inspired by the original React [Sileo](https://github.com/hiaaryan/sileo) projec
 npm i gooey-toast
 ```
 
-GitHub Packages mirror (scoped package):
+Or install a downloaded release tarball locally:
 
 ```bash
-npm i @janusfil/gooey-toast --registry=https://npm.pkg.github.com
+npm i ./path/to/gooey-toast-<version>.tgz
 ```
 
 ## Quick start (vanilla JS/TS)
@@ -177,9 +178,9 @@ The package ships with `styles.css` and uses stable data attributes like `[data-
 
 - Push and PR runs are validated by CI (`.github/workflows/ci.yml`).
 - Tagging `vX.Y.Z` triggers publish flow (`.github/workflows/publish.yml`).
-- Publish flow validates tag/version, builds artifacts, publishes to npm, mirrors
-  the same version to GitHub Packages, and creates a GitHub Release with
-  generated notes.
+- Publish flow validates tag/version, builds artifacts, publishes to npm,
+  attaches a release tarball plus `sha256sum.txt`, emits build provenance, and
+  creates a GitHub Release with generated notes.
 
 ## Project hygiene
 
