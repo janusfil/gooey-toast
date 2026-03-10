@@ -50,6 +50,8 @@
 		"build": "npm run clean && npm run build:ts && npm run build:css",
 		"check:package": "npm pack --dry-run",
 		"check:supply-chain": "node ./scripts/check-supply-chain.mjs",
+		"demo:build": "node ./scripts/build-demo.mjs",
+		"test:fuzz": "node --test test/**/*.test.cjs",
 		"prepublishOnly": "npm run build",
 		"dev": "tsc --watch --preserveWatchOutput",
 		"playground": "esbuild playground/main.ts --bundle --outfile=playground/.build/main.js --format=esm --platform=browser --target=es2020 --sourcemap --servedir=. --serve=8080 --watch",
@@ -57,6 +59,7 @@
 	},
 	"devDependencies": {
 		"esbuild": "^0.27.3",
+		"fast-check": "^4.6.0",
 		"typescript": "^5.9.2"
 	}
 }

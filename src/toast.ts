@@ -1,5 +1,12 @@
 import { createStateIcon } from "./icons";
 import {
+	clamp,
+	normalizeDuration,
+	resolveAutopilot,
+	resolvePlacement,
+	type ToastPlacement,
+} from "./internal";
+import {
 	TOAST_POSITIONS,
 	type ToastButton,
 	type ToastOptions,
@@ -14,10 +21,7 @@ import {
 	type ToasterOptions,
 } from "./types";
 
-const DEFAULT_DURATION = 6000;
 const EXIT_DURATION = 260;
-const AUTO_EXPAND_DELAY = 150;
-const AUTO_COLLAPSE_DELAY = 4000;
 const SWIPE_DISMISS_DISTANCE = 30;
 const SWIPE_MAX_TRANSLATE = 20;
 const HOVER_RESUME_DELAY = 50;
@@ -41,11 +45,6 @@ interface ToastRecord extends InternalToastOptions {
 
 interface ExitTimerRecord {
 	remove?: number;
-}
-
-interface ToastPlacement {
-	align: "left" | "center" | "right";
-	edge: "top" | "bottom";
 }
 
 interface ToastViewCallbacks {
@@ -89,9 +88,6 @@ let idCounter = 0;
 const generateId = () =>
 	`${++idCounter}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-const normalizeDuration = (value: number | null | undefined) =>
-	value === undefined ? DEFAULT_DURATION : value;
-
 const isTimedDuration = (value: number | null | undefined): value is number =>
 	value != null && value > 0;
 
@@ -101,34 +97,6 @@ const getNow = () =>
 		: Date.now();
 
 const timeoutKey = (item: ToastRecord) => `${item.id}:${item.instanceId}`;
-
-const clamp = (value: number, min: number, max: number) =>
-	Math.min(max, Math.max(min, value));
-
-const resolvePlacement = (position: ToastPosition): ToastPlacement => ({
-	align: position.endsWith("left")
-		? "left"
-		: position.endsWith("center")
-			? "center"
-			: "right",
-	edge: position.startsWith("top") ? "top" : "bottom",
-});
-
-const resolveAutopilot = (
-	options: InternalToastOptions,
-	duration: number | null,
-): Pick<ToastRecord, "autoExpandDelayMs" | "autoCollapseDelayMs"> => {
-	if (options.autopilot === false || duration == null || duration <= 0) {
-		return {};
-	}
-
-	const cfg = typeof options.autopilot === "object" ? options.autopilot : undefined;
-
-	return {
-		autoExpandDelayMs: clamp(cfg?.expand ?? AUTO_EXPAND_DELAY, 0, duration),
-		autoCollapseDelayMs: clamp(cfg?.collapse ?? AUTO_COLLAPSE_DELAY, 0, duration),
-	};
-};
 
 const mergeOptions = (options: InternalToastOptions): InternalToastOptions => ({
 	...store.options,
