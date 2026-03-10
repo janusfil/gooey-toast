@@ -14,6 +14,8 @@ A framework-agnostic, physics-inspired toast notification package.
 
 Inspired by the original React [Sileo](https://github.com/hiaaryan/sileo) project by Aryan Arora, this package brings the same gooey toast feel to framework-agnostic apps.
 
+Live demo: [janusfil.github.io/gooey-toast](https://janusfil.github.io/gooey-toast/)
+
 - No React/Vue peer dependency
 - Works in Vue, React, Svelte, Astro, vanilla JS, and more
 - Keeps the gooey SVG + spring motion style
@@ -89,7 +91,7 @@ const save = async () => {
 - `toast.warning(options)`
 - `toast.info(options)`
 - `toast.action(options)`
-- `toast.promise(promise, options)`
+- `toast.promise(promiseOrFactory, options)`
 - `toast.dismiss(id)`
 - `toast.clear(position?)`
 - `mountToaster(options)` / `createToaster(options)`
@@ -177,6 +179,7 @@ The package ships with `styles.css` and uses stable data attributes like `[data-
 ## Release and package automation
 
 - Push and PR runs are validated by CI (`.github/workflows/ci.yml`).
+- Pushes to `main` rebuild and deploy the demo to GitHub Pages (`.github/workflows/pages.yml`).
 - Tagging `vX.Y.Z` triggers publish flow (`.github/workflows/publish.yml`).
 - Publish flow validates tag/version, builds artifacts, publishes to npm,
   attaches a release tarball plus `sha256sum.txt`, emits build provenance, and
