@@ -1,4 +1,5 @@
 dist
+demo-dist
 node_modules
 playground/.build
 .release

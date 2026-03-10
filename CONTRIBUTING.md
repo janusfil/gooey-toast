@@ -7,6 +7,8 @@ Thanks for helping improve gooey-toast.
 ```bash
 npm ci
 npm run build
+npm run demo:build
+npm run test:fuzz
 ```
 
 For local visual debugging:
@@ -23,8 +25,10 @@ Before opening a PR, please:
 
 1. Keep changes focused and small where possible.
 2. Run `npm run build`.
-3. Run `npm run playground:build` for UI or behavior changes.
-4. Update `README.md` when API or behavior changes.
+3. Run `npm run test:fuzz`.
+4. Run `npm run playground:build` for UI or behavior changes.
+5. Run `npm run demo:build` when changing the published demo.
+6. Update `README.md` when API or behavior changes.
 
 ## Versioning and release
 
