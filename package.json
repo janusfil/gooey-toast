@@ -1,6 +1,6 @@
 {
 	"name": "gooey-toast",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "A framework-agnostic, physics-inspired toast notification library.",
 	"license": "MIT",
 	"keywords": [
