@@ -60,6 +60,6 @@
 	"devDependencies": {
 		"esbuild": "^0.28.0",
 		"fast-check": "^4.6.0",
-		"typescript": "^5.9.2"
+		"typescript": "^6.0.2"
 	}
 }
